@@ -35,25 +35,136 @@ object CommandRegistrar {
 
     fun registerCommands() {
         cmdManager.command("cobblespawners", permission = "cobblespawners.base", aliases = listOf("bcs")) {
-            // "edit" subcommand: /cobblespawners edit <spawnerName>
-            subcommand("edit", permission = "CobbleSpawners.Edit") {
-                executes { ctx -> handleEditCommand(ctx) }
-            }
-
             // "rename" subcommand: /cobblespawners rename <oldName> <newName>
+    // "rename" subcommand: /cobblespawners rename <oldName> <newName>
             subcommand("rename", permission = "CobbleSpawners.Rename") {
-                executes { ctx -> handleRenameCommand(ctx) }
+                then(
+                    argument("oldName", StringArgumentType.string())
+                        .suggests { context: CommandContext<ServerCommandSource>, builder: SuggestionsBuilder ->
+                            CobbleSpawnersConfig.spawners.values.forEach { spawner ->
+                                builder.suggest(spawner.spawnerName)
+                            }
+                            builder.buildFuture()
+                        }
+                        .then(
+                            argument("newName", StringArgumentType.string())
+                                .executes { ctx -> handleRenameCommand(ctx) }
+                        )
+                        .executes { ctx -> handleRenameCommand(ctx) }
+                )
             }
 
-            // "addmon" subcommand: /cobblespawners addmon <spawnerName> <pokemonName> [formName]
+
+// "addmon" subcommand with suggestions
             subcommand("addmon", permission = "CobbleSpawners.Addmon") {
-                executes { ctx -> handleAddMonCommand(ctx) }
+                executes { ctx ->
+                    sendError(ctx, "Usage: /cobblespawners addmon <spawnerName> <pokemonName> [formName]")
+                    0
+                }
+
+                then(
+                    argument("spawnerName", StringArgumentType.string())
+                        .suggests { context: CommandContext<ServerCommandSource>, builder: SuggestionsBuilder ->
+                            CobbleSpawnersConfig.spawners.values.forEach { spawner ->
+                                builder.suggest(spawner.spawnerName)
+                            }
+                            builder.buildFuture()
+                        }
+                        .then(
+                            argument("pokemonName", StringArgumentType.string())
+                                .suggests { context: CommandContext<ServerCommandSource>, builder: SuggestionsBuilder ->
+                                    // Suggest all implemented Pokémon names with proper capitalization.
+                                    PokemonSpecies.implemented.forEach { species ->
+                                        builder.suggest(species.name.replaceFirstChar { it.uppercase() })
+                                    }
+                                    builder.buildFuture()
+                                }
+                                .then(
+                                    argument("formName", StringArgumentType.string())
+                                        .suggests { context: CommandContext<ServerCommandSource>, builder: SuggestionsBuilder ->
+                                            // Manually parse the input to retrieve the pokemonName.
+                                            val args = context.input.trim().split("\\s+".toRegex())
+                                            if (args.size < 4) return@suggests builder.buildFuture()
+                                            val pokemonName = args[3].replaceFirstChar { it.uppercase() }
+                                            val species = PokemonSpecies.getByName(pokemonName.lowercase())
+                                            // Suggest "Normal" as default and all available forms (capitalized).
+                                            builder.suggest("Normal")
+                                            species?.forms?.forEach { form ->
+                                                builder.suggest(form.name.replaceFirstChar { it.uppercase() })
+                                            }
+                                            builder.buildFuture()
+                                        }
+                                        .executes { ctx -> handleAddMonCommand(ctx) }
+                                )
+                                .executes { ctx -> handleAddMonCommand(ctx) }
+                        )
+                        .executes { ctx ->
+                            sendError(ctx, "Please specify a Pokemon name")
+                            0
+                        }
+                )
             }
 
-            // "removemon" subcommand: /cobblespawners removemon <spawnerName> <pokemonName> [formName]
+
+
+// "removemon" subcommand with suggestions
             subcommand("removemon", permission = "CobbleSpawners.Removemon") {
-                executes { ctx -> handleRemoveMonCommand(ctx) }
+                executes { ctx ->
+                    sendError(ctx, "Usage: /cobblespawners removemon <spawnerName> <pokemonName> [formName]")
+                    0
+                }
+
+                then(
+                    argument("spawnerName", StringArgumentType.string())
+                        .suggests { context: CommandContext<ServerCommandSource>, builder: SuggestionsBuilder ->
+                            CobbleSpawnersConfig.spawners.values.forEach { spawner ->
+                                builder.suggest(spawner.spawnerName)
+                            }
+                            builder.buildFuture()
+                        }
+                        .then(
+                            argument("pokemonName", StringArgumentType.string())
+                                .suggests { context: CommandContext<ServerCommandSource>, builder: SuggestionsBuilder ->
+                                    // Manually parse the input to retrieve spawnerName from the command tokens.
+                                    val args = context.input.trim().split("\\s+".toRegex())
+                                    if (args.size < 3) return@suggests builder.buildFuture()
+                                    val spawnerName = args[2]
+                                    val spawner = CobbleSpawnersConfig.spawners.values.find { it.spawnerName.equals(spawnerName, ignoreCase = true) }
+                                    // Suggest only the Pokémon that are currently selected for this spawner.
+                                    spawner?.selectedPokemon?.forEach { pokemonEntry ->
+                                        builder.suggest(pokemonEntry.pokemonName)
+                                    }
+                                    builder.buildFuture()
+                                }
+                                .then(
+                                    argument("formName", StringArgumentType.string())
+                                        .suggests { context: CommandContext<ServerCommandSource>, builder: SuggestionsBuilder ->
+                                            // Manually parse the input to retrieve spawnerName and pokemonName.
+                                            val args = context.input.trim().split("\\s+".toRegex())
+                                            if (args.size < 4) return@suggests builder.buildFuture()
+                                            val spawnerName = args[2]
+                                            val pokemonName = args[3]
+                                            val spawner = CobbleSpawnersConfig.spawners.values.find { it.spawnerName.equals(spawnerName, ignoreCase = true) }
+                                            val pokemonEntry = spawner?.selectedPokemon?.find { it.pokemonName.equals(pokemonName, ignoreCase = true) }
+                                            // Suggest the form if available.
+                                            pokemonEntry?.formName?.let { form ->
+                                                builder.suggest(form)
+                                            }
+                                            builder.buildFuture()
+                                        }
+                                        .executes { ctx -> handleRemoveMonCommand(ctx) }
+                                )
+                                .executes { ctx -> handleRemoveMonCommand(ctx) }
+                        )
+                        .executes { ctx ->
+                            sendError(ctx, "Please specify a Pokemon name")
+                            0
+                        }
+                )
             }
+
+
+
 
             // "killspawned" subcommand: /cobblespawners killspawned <spawnerName>
             // Enhanced killspawned command with suggestions
@@ -80,10 +191,6 @@ object CommandRegistrar {
                         }
                 )
             }
-            // "togglevisibility" subcommand: /cobblespawners togglevisibility <spawnerName>
-            subcommand("togglevisibility", permission = "CobbleSpawners.ToggleVisibility") {
-                executes { ctx -> handleToggleVisibility(ctx) }
-            }
 
             // "toggleradius" subcommand: /cobblespawners toggleradius <spawnerName>
             subcommand("toggleradius", permission = "CobbleSpawners.ToggleRadius") {
@@ -107,21 +214,51 @@ object CommandRegistrar {
                 )
             }
 
-
             // "teleport" subcommand: /cobblespawners teleport <spawnerName>
             subcommand("teleport", permission = "CobbleSpawners.Teleport") {
-                executes { ctx -> handleTeleportCommand(ctx) }
+                then(
+                    argument("spawnerName", StringArgumentType.string())
+                        .suggests { context: CommandContext<ServerCommandSource>, builder: SuggestionsBuilder ->
+                            CobbleSpawnersConfig.spawners.values.forEach { spawner ->
+                                builder.suggest(spawner.spawnerName)
+                            }
+                            builder.buildFuture()
+                        }
+                        .executes { ctx -> handleTeleportCommand(ctx) }
+                )
             }
 
-            // "list" subcommand: /cobblespawners list
-            subcommand("list", permission = "CobbleSpawners.List") {
-                executes { ctx -> handleListCommand(ctx) }
-            }
+
 
             // "gui" subcommand: /cobblespawners gui
+// "gui" subcommand: /cobblespawners gui <spawnerName>
+// "gui" subcommand: /cobblespawners gui [spawnerName]
             subcommand("gui", permission = "CobbleSpawners.GUI") {
-                executes { ctx -> handleGuiCommand(ctx) }
+                // If no spawner name is provided, open the global spawner list GUI.
+                executes { ctx ->
+                    val player = ctx.source.player as? ServerPlayerEntity
+                    if (player == null) {
+                        sendError(ctx, "Only players can use /cobblespawners gui.")
+                        return@executes 0
+                    }
+                    SpawnerListGui.openSpawnerListGui(player)
+                    sendSuccess(ctx, "Opened Global Spawner GUI.")
+                    1
+                }
+                // If a spawner name is provided, open the individual spawner GUI.
+                then(
+                    argument("spawnerName", StringArgumentType.string())
+                        .suggests { context: CommandContext<ServerCommandSource>, builder: SuggestionsBuilder ->
+                            CobbleSpawnersConfig.spawners.values.forEach { spawner ->
+                                builder.suggest(spawner.spawnerName)
+                            }
+                            CompletableFuture.completedFuture(builder.build())
+                        }
+                        .executes { ctx -> handleGuiCommand(ctx) }
+                )
             }
+
+
 
             // "reload" subcommand: /cobblespawners reload
             subcommand("reload", permission = "CobbleSpawners.Reload") {
@@ -209,15 +346,18 @@ object CommandRegistrar {
             return 0
         }
         val spawnerName = args[2]
-        val pokemonName = args[3].lowercase()
-        val formName = if (args.size >= 5) args[4].lowercase() else ""
+        // Capitalize the Pokémon name (e.g. "Rattata")
+        val pokemonName = args[3].replaceFirstChar { it.uppercase() }
+        // Capitalize the form name if provided (e.g. "Alola"); otherwise, use empty string
+        val formName = if (args.size >= 5) args[4].replaceFirstChar { it.uppercase() } else ""
 
         val spawnerEntry = CobbleSpawnersConfig.spawners.values.find { it.spawnerName == spawnerName }
         if (spawnerEntry == null) {
             sendError(ctx, "Spawner '$spawnerName' not found.")
             return 0
         }
-        val species = PokemonSpecies.getByName(pokemonName)
+        // Look up species using lowercase for compatibility
+        val species = PokemonSpecies.getByName(pokemonName.lowercase())
         if (species == null) {
             sendError(ctx, "Pokémon '$pokemonName' not found.")
             return 0
@@ -226,7 +366,7 @@ object CommandRegistrar {
         val selectedForm = when {
             species.forms.isEmpty() -> "Normal"
             species.forms.any { it.name.equals(formName, ignoreCase = true) } -> formName
-            formName.isBlank() || formName.equals("normal", ignoreCase = true) -> "Normal"
+            formName.isBlank() || formName.equals("Normal", ignoreCase = true) -> "Normal"
             else -> {
                 sendError(ctx, "Form '$formName' does not exist for Pokémon '$pokemonName'. Defaulting to 'Normal'.")
                 "Normal"
@@ -267,6 +407,8 @@ object CommandRegistrar {
         )
 
         if (CobbleSpawnersConfig.addPokemonSpawnEntry(spawnerEntry.spawnerPos, newEntry)) {
+            // Instead of adding the entry directly to the config, simply reload the configuration.
+            CobbleSpawnersConfig.reloadBlocking()
             sendSuccess(ctx, "Added Pokémon '$pokemonName' (form '$selectedForm') to spawner '$spawnerName'.")
             return 1
         } else {
@@ -274,6 +416,7 @@ object CommandRegistrar {
             return 0
         }
     }
+
 
     private fun handleRemoveMonCommand(ctx: CommandContext<ServerCommandSource>): Int {
         val args = getArgs(ctx)
@@ -365,7 +508,6 @@ object CommandRegistrar {
         return 1
     }
 
-
     private fun handleTeleportCommand(ctx: CommandContext<ServerCommandSource>): Int {
         val args = getArgs(ctx)
         if (args.size < 3) {
@@ -373,7 +515,7 @@ object CommandRegistrar {
             return 0
         }
         val spawnerName = args[2]
-        val spawnerData = CobbleSpawnersConfig.spawners.values.find { it.spawnerName == spawnerName }
+        val spawnerData = CobbleSpawnersConfig.spawners.values.find { it.spawnerName.equals(spawnerName, ignoreCase = true) }
         val player = ctx.source.player as? ServerPlayerEntity
         if (spawnerData == null) {
             sendError(ctx, "Spawner '$spawnerName' not found.")
@@ -395,6 +537,7 @@ object CommandRegistrar {
         return 1
     }
 
+
     private fun handleListCommand(ctx: CommandContext<ServerCommandSource>): Int {
         val player = ctx.source.player as? ServerPlayerEntity ?: run {
             sendError(ctx, "Only players can use /cobblespawners list.")
@@ -412,14 +555,27 @@ object CommandRegistrar {
     }
 
     private fun handleGuiCommand(ctx: CommandContext<ServerCommandSource>): Int {
+        val args = ctx.input.trim().split("\\s+".toRegex())
+        if (args.size < 3) {
+            sendError(ctx, "Usage: /cobblespawners gui <spawnerName>")
+            return 0
+        }
+        val spawnerName = args[2]
+        val spawnerData = CobbleSpawnersConfig.spawners.values.find { it.spawnerName.equals(spawnerName, ignoreCase = true) }
+        if (spawnerData == null) {
+            sendError(ctx, "Spawner '$spawnerName' not found.")
+            return 0
+        }
         val player = ctx.source.player as? ServerPlayerEntity ?: run {
             sendError(ctx, "Only players can use /cobblespawners gui.")
             return 0
         }
-        SpawnerListGui.openSpawnerListGui(player)
-        sendSuccess(ctx, "Opened Spawner GUI.")
+        // Open the GUI for the selected spawner.
+        SpawnerPokemonSelectionGui.openSpawnerGui(player, spawnerData.spawnerPos)
+        sendSuccess(ctx, "Opened spawner GUI for '$spawnerName'.")
         return 1
     }
+
 
     private fun handleReloadCommand(ctx: CommandContext<ServerCommandSource>): Int {
         CobbleSpawnersConfig.reloadBlocking()

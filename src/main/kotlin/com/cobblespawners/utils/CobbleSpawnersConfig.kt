@@ -100,11 +100,10 @@ data class SpawnerData(
     var spawnLimit: Int = 4,
     var spawnAmountPerSpawn: Int = 1,
     var visible: Boolean = true,
-    var showParticles: Boolean = true
 )
 
 data class CobbleSpawnersConfigData(
-    override val version: String = "1.0.5",
+    override val version: String = "2.0.0",
     override val configId: String = "cobblespawners",
 
     var globalConfig: GlobalConfig = GlobalConfig(),
@@ -113,7 +112,7 @@ data class CobbleSpawnersConfigData(
 
 object CobbleSpawnersConfig {
     private val logger = LoggerFactory.getLogger("CobbleSpawnersConfig")
-    private const val CURRENT_VERSION = "1.0.5"
+    private const val CURRENT_VERSION = "2.0.0"
 
     private lateinit var configManager: ConfigManager<CobbleSpawnersConfigData>
     private var isInitialized = false
@@ -176,18 +175,11 @@ object CobbleSpawnersConfig {
     }
 
     fun saveSpawnerData() {
-        val existingConfigData = config.spawners.associateBy { it.spawnerPos }
-        config.spawners = spawners.values.map { currentSpawner ->
-            existingConfigData[currentSpawner.spawnerPos]?.let { existingSpawner ->
-                currentSpawner.copy(
-                    selectedPokemon = existingSpawner.selectedPokemon.toMutableList()
-                )
-            } ?: currentSpawner
-        }.toMutableList()
-
+        config.spawners = spawners.values.toMutableList()
         logDebug("Spawner data saved.")
         saveConfigBlocking()
     }
+
 
     private fun roundToOneDecimal(value: Float): Float {
         return (value * 10).roundToInt() / 10f
@@ -317,7 +309,6 @@ object CobbleSpawnersConfig {
             spawnLimit = 4,
             spawnAmountPerSpawn = 1,
             visible = true,
-            showParticles = true
         )
         spawners[spawnerPos] = spawnerData
         config.spawners.add(spawnerData)

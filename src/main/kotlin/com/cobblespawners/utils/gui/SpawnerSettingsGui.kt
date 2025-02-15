@@ -39,7 +39,6 @@ object SpawnerSettingsGui {
                 23 -> adjustSpawnerSetting(player, spawnerPos, "Spawn Height", spawnerData.spawnRadius.height, context.clickType)
                 29 -> adjustSpawnerSetting(player, spawnerPos, "Spawn Limit", spawnerData.spawnLimit, context.clickType)
                 31 -> toggleSpawnerVisibility(context, player, spawnerPos, spawnerData.visible)
-                33 -> toggleShowParticles(context, player, spawnerPos, spawnerData.showParticles)
                 39 -> adjustSpawnerSetting(player, spawnerPos, "Spawn Amount Per Spawn", spawnerData.spawnAmountPerSpawn, context.clickType) // New Button
                 49 -> {
                     // Close the current GUI and reopen the Spawner list GUI
@@ -135,19 +134,6 @@ object SpawnerSettingsGui {
             "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvODVmZmI1MjMzMmNiZmNiNWJlNTM1NTNkNjdjNzI2NDNiYTJiYjUxN2Y3ZTg5ZGVkNTNkNGE5MmIwMGNlYTczZSJ9fX0="
         )
 
-        layout[33] = CustomGui.createPlayerHeadButton(
-            "show_particles",
-            Text.literal("Show Particles").styled {
-                it.withColor(Formatting.GREEN)
-            },
-            listOf(
-                Text.literal("Toggle Show Particles").styled { it.withColor(Formatting.GRAY).withItalic(false) },
-                Text.literal("Status: ${if (spawnerData.showParticles) "ON" else "OFF"}").styled {
-                    it.withColor(if (spawnerData.showParticles) Formatting.GREEN else Formatting.GRAY).withItalic(false)
-                }
-            ),
-            "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNDQ2MWQ5ZDA2YzBiZjRhN2FmNGIxNmZkMTI4MzFlMmJlMGNmNDJlNmU1NWU5YzBkMzExYTJhODk2NWEyM2IzNCJ9fX0="
-        )
 
         // Row 5: New Spawn Amount Per Spawn button
         layout[39] = CustomGui.createPlayerHeadButton(
@@ -251,13 +237,6 @@ object SpawnerSettingsGui {
         }
     }
 
-    private fun toggleShowParticles(context: InteractionContext, player: ServerPlayerEntity, spawnerPos: BlockPos, showParticles: Boolean) {
-        CobbleSpawnersConfig.updateSpawner(spawnerPos) { spawnerData ->
-            spawnerData.showParticles = !showParticles
-        }
-        CobbleSpawnersConfig.saveSpawnerData()
-        updateGuiItem(context, player, "Show Particles", !showParticles, if (!showParticles) Formatting.GREEN else Formatting.RED)
-    }
 
     private fun updateGuiItem(context: InteractionContext, player: ServerPlayerEntity, settingName: String, newValue: Boolean, color: Formatting) {
         val itemStack = context.clickedStack

@@ -178,7 +178,6 @@ object SpawnerBlockEvents {
             spawnLimit = 4,
             spawnAmountPerSpawn = 1,
             visible = true,
-            showParticles = true
         )
 
         // Add the spawner to both the config and map
