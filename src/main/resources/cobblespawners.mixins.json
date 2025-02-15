@@ -1,11 +1,12 @@
 {
-	"required": true,
-	"package": "com.cobblespawners.mixin",
-	"compatibilityLevel": "JAVA_21",
-	"mixins": [
-		"SpawnerEntityDataMixin"
-	],
-	"injectors": {
-		"defaultRequire": 1
+  "required": true,
+  "package": "com.cobblespawners.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ServerWorldAccessor",
+    "SpawnerEntityDataMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
 	}
 }

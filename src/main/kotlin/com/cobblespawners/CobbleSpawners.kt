@@ -6,6 +6,7 @@ import com.cobblemon.mod.common.api.pokemon.PokemonSpecies
 import com.cobblemon.mod.common.api.pokemon.stats.Stats
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
 import com.cobblemon.mod.common.pokemon.Pokemon
+import com.cobblespawners.mixin.ServerWorldAccessor
 import com.cobblespawners.api.SpawnerNBTManager
 import com.cobblespawners.utils.*
 import net.fabricmc.api.ModInitializer
@@ -231,9 +232,10 @@ object CobbleSpawners : ModInitializer {
 
 
 			// Forcefully spawn the Pokémon without regard to claim protections.
-			if (attemptSpawnSinglePokemon(serverWorld, spawnPos, picked, spawnerPos)) {
+			if (attemptSpawnSinglePokemon(serverWorld, spawnPos, picked, spawnerPos, spawnerData.lowLevelEntitySpawn)) {
 				spawnedCount++
 			}
+
 		}
 
 		if (spawnedCount > 0) {
@@ -250,7 +252,8 @@ object CobbleSpawners : ModInitializer {
 		serverWorld: ServerWorld,
 		spawnPos: BlockPos,
 		entry: PokemonSpawnEntry,
-		spawnerPos: BlockPos
+		spawnerPos: BlockPos,
+		lowLevel: Boolean
 	): Boolean {
 		val sanitized = entry.pokemonName.replace(Regex("[^a-zA-Z0-9]"), "").lowercase()
 		val species = PokemonSpecies.getByName(sanitized) ?: run {
@@ -279,15 +282,30 @@ object CobbleSpawners : ModInitializer {
 			pokemonEntity.pitch
 		)
 
-		return if (serverWorld.spawnEntity(pokemonEntity)) {
+		// If lowLevel is true, use our mixin accessor to force-add the entity.
+		val success = if (lowLevel) {
+			try {
+				(serverWorld as com.cobblespawners.mixin.ServerWorldAccessor).invokeAddFreshEntity(pokemonEntity)
+			} catch (e: Exception) {
+				logger.warn("Error using forced spawn method, falling back to spawnEntity", e)
+				serverWorld.spawnEntity(pokemonEntity)
+			}
+		} else {
+			serverWorld.spawnEntity(pokemonEntity)
+		}
+
+		return if (success) {
 			SpawnerNBTManager.addPokemon(pokemonEntity, spawnerPos, entry.pokemonName)
-			logDebug("Spawned '${species.name}' @ $spawnPos (UUID ${pokemonEntity.uuid})", "cobblespawners")
+			logDebug("Spawned '${pokemon.species.name}' @ $spawnPos (UUID ${pokemonEntity.uuid})", "cobblespawners")
 			true
 		} else {
-			logger.warn("Failed to spawn '${species.name}' at $spawnPos")
+			logger.warn("Failed to spawn '${pokemon.species.name}' at $spawnPos")
 			false
 		}
 	}
+
+
+
 
 	private fun buildPropertiesString(
 		sanitizedName: String,

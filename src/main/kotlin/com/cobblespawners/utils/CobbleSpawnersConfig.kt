@@ -100,10 +100,11 @@ data class SpawnerData(
     var spawnLimit: Int = 4,
     var spawnAmountPerSpawn: Int = 1,
     var visible: Boolean = true,
+    var lowLevelEntitySpawn: Boolean = false,
 )
 
 data class CobbleSpawnersConfigData(
-    override val version: String = "2.0.0",
+    override val version: String = "2.0.1",
     override val configId: String = "cobblespawners",
 
     var globalConfig: GlobalConfig = GlobalConfig(),
@@ -112,7 +113,7 @@ data class CobbleSpawnersConfigData(
 
 object CobbleSpawnersConfig {
     private val logger = LoggerFactory.getLogger("CobbleSpawnersConfig")
-    private const val CURRENT_VERSION = "2.0.0"
+    private const val CURRENT_VERSION = "2.0.1"
     private const val MOD_ID = "cobblespawners" // Added mod ID for debug
 
     private lateinit var configManager: ConfigManager<CobbleSpawnersConfigData>
