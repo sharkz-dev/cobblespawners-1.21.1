@@ -1,5 +1,6 @@
 package com.cobblespawners
 
+import com.blanketutils.utils.logDebug
 import com.cobblespawners.utils.gui.SpawnerPokemonSelectionGui
 import com.cobblemon.mod.common.api.pokemon.PokemonSpecies
 import com.cobblemon.mod.common.api.pokemon.stats.Stats
@@ -19,22 +20,14 @@ import net.minecraft.util.Identifier
 import net.minecraft.util.math.BlockPos
 import net.minecraft.util.math.random.Random
 import net.minecraft.world.World
+import net.minecraft.world.chunk.ChunkStatus
 import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
-
-val griefDefenderApi: Any? = try {
-	val griefDefenderClass = Class.forName("com.griefdefender.api.GriefDefender")
-	val vector3iClass = Class.forName("com.griefdefender.lib.flowpowered.math.vector.Vector3i")
-	griefDefenderClass.newInstance()
-	vector3iClass
-} catch (e: ClassNotFoundException) {
-	null
-}
-
 
 
 object CobbleSpawners : ModInitializer {
@@ -46,6 +39,9 @@ object CobbleSpawners : ModInitializer {
 
 	// Cache of valid positions for each spawner, keyed by spawner's BlockPos.
 	val spawnerValidPositions = ConcurrentHashMap<BlockPos, Map<String, List<BlockPos>>>()
+
+	// Added: Store scheduler reference to shut it down on server stop.
+	private var spawnScheduler: ScheduledExecutorService? = null
 
 	override fun onInitialize() {
 		logger.info("Initializing CobbleSpawners")
@@ -75,6 +71,9 @@ object CobbleSpawners : ModInitializer {
 					server.getWorld(worldKey)?.let { cullSpawnerPokemon(it, pos) }
 				}
 			}
+			// Added: Shut down the scheduler to ensure it doesn't linger.
+			spawnScheduler?.shutdownNow()
+			spawnScheduler = null
 		}
 	}
 
@@ -83,7 +82,7 @@ object CobbleSpawners : ModInitializer {
 			val entity = world.getEntity(uuid)
 			if (entity is PokemonEntity) {
 				entity.discard()
-				logDebug("Despawned Pokémon with UUID $uuid from spawner at $spawnerPos")
+				logDebug("Despawned Pokémon with UUID $uuid from spawner at $spawnerPos", "cobblespawners")
 			}
 		}
 	}
@@ -93,46 +92,83 @@ object CobbleSpawners : ModInitializer {
 	 * The spawn delay is computed by converting the configured spawnTimerTicks (ticks) to milliseconds.
 	 */
 	private fun registerSpawnScheduler(server: MinecraftServer) {
-		val scheduler = Executors.newSingleThreadScheduledExecutor()
-		scheduler.scheduleAtFixedRate({
+		spawnScheduler = Executors.newSingleThreadScheduledExecutor()
+		spawnScheduler?.scheduleAtFixedRate({
 			// Ensure we run spawn logic on the main server thread.
 			server.executeSync {
-				val currentTime = System.currentTimeMillis()
-				CobbleSpawnersConfig.spawners.forEach { (pos, data) ->
-					val world = server.getWorld(parseDimension(data.dimension)) ?: return@forEach
-					if (!world.isChunkLoaded(pos.x shr 4, pos.z shr 4)) return@forEach
-
-					// The delay is stored in ticks (e.g. 200 ticks). Convert ticks to milliseconds.
-					val spawnDelayMillis = data.spawnTimerTicks * 50
-					val lastSpawnTime = CobbleSpawnersConfig.lastSpawnTicks[pos] ?: 0L
-
-					if (currentTime >= lastSpawnTime + spawnDelayMillis && !SpawnerPokemonSelectionGui.isSpawnerGuiOpen(pos)) {
-						val currentCount = SpawnerNBTManager.getPokemonCountForSpawner(world, pos)
-						if (currentCount < data.spawnLimit) {
-							logDebug("Spawning Pokémon at spawner '${data.spawnerName}'")
-							spawnPokemon(world, data)
-						} else {
-							logDebug("Spawn limit reached for spawner '${data.spawnerName}'. No spawn.")
-						}
-						// Update last spawn time using system time.
-						CobbleSpawnersConfig.lastSpawnTicks[pos] = currentTime
-					}
-				}
+				processSpawnerSpawns(server)
 			}
 		}, 0, 1000, TimeUnit.MILLISECONDS)
 	}
 
+	private fun processSpawnerSpawns(server: MinecraftServer) {
+		val currentTime = System.currentTimeMillis()
+		logDebug("processSpawnerSpawns: currentTime = $currentTime", "cobblespawners")
+
+		for ((pos, data) in CobbleSpawnersConfig.spawners) {
+			val dimensionKey = parseDimension(data.dimension)
+			val world = server.getWorld(dimensionKey)
+			if (world == null) {
+				logDebug("processSpawnerSpawns: world is null for spawner at $pos with dimension ${data.dimension}", "cobblespawners")
+				continue
+			}
+			if (world.getChunk(pos.x shr 4, pos.z shr 4, ChunkStatus.FULL, false) == null) {
+				logDebug("processSpawnerSpawns: chunk not loaded for spawner '${data.spawnerName}' at $pos", "cobblespawners")
+				continue
+			}
+
+			val spawnDelayMillis = data.spawnTimerTicks * 50
+			var lastSpawnTime = CobbleSpawnersConfig.lastSpawnTicks[pos]
+			if (lastSpawnTime == null) {
+				// Initialize lastSpawnTime so that the spawner waits for the delay from now on.
+				lastSpawnTime = currentTime
+				CobbleSpawnersConfig.lastSpawnTicks[pos] = lastSpawnTime
+				logDebug("processSpawnerSpawns: initializing lastSpawnTime for spawner at $pos to $currentTime", "cobblespawners")
+				continue
+			}
+
+			logDebug("processSpawnerSpawns: spawner at $pos, lastSpawnTime = $lastSpawnTime, spawnDelayMillis = $spawnDelayMillis", "cobblespawners")
+
+			// Check if the spawn delay has elapsed
+			if (currentTime < lastSpawnTime + spawnDelayMillis) {
+				logDebug("processSpawnerSpawns: spawn delay not elapsed for spawner at $pos", "cobblespawners")
+				continue
+			}
+			// Check if the spawner GUI is closed
+			if (SpawnerPokemonSelectionGui.isSpawnerGuiOpen(pos)) {
+				logDebug("processSpawnerSpawns: spawner GUI is open for spawner at $pos", "cobblespawners")
+				continue
+			}
+
+			val currentCount = SpawnerNBTManager.getPokemonCountForSpawner(world, pos)
+			logDebug("processSpawnerSpawns: current Pokemon count = $currentCount for spawner at $pos (limit: ${data.spawnLimit})", "cobblespawners")
+			if (currentCount < data.spawnLimit) {
+				logDebug("processSpawnerSpawns: Spawning Pokémon at spawner '${data.spawnerName}' at $pos", "cobblespawners")
+				spawnPokemon(world, data)
+				// Update the last spawn time only when a spawn occurs.
+				CobbleSpawnersConfig.lastSpawnTicks[pos] = currentTime
+			} else {
+				logDebug("processSpawnerSpawns: Spawn limit reached for spawner '${data.spawnerName}' at $pos", "cobblespawners")
+			}
+		}
+	}
 
 	private fun spawnPokemon(serverWorld: ServerWorld, spawnerData: SpawnerData) {
 		val spawnerPos = spawnerData.spawnerPos
 		val currentSpawned = SpawnerNBTManager.getPokemonCountForSpawner(serverWorld, spawnerPos)
 
 		if (currentSpawned >= spawnerData.spawnLimit) {
-			logDebug("Safety check: Spawn limit reached at $spawnerPos")
+			logDebug("Safety check: Spawn limit reached at $spawnerPos", "cobblespawners")
 			return
 		}
 		if (SpawnerPokemonSelectionGui.isSpawnerGuiOpen(spawnerPos)) {
-			logDebug("GUI is open for spawner at $spawnerPos. Skipping spawn.")
+			logDebug("GUI is open for spawner at $spawnerPos. Skipping spawn.", "cobblespawners")
+			return
+		}
+
+		// Added check: ensure the spawner's own chunk is still loaded.
+		if (serverWorld.getChunk(spawnerPos.x shr 4, spawnerPos.z shr 4, ChunkStatus.FULL, false) == null) {
+			println("spawnPokemon: spawner chunk not loaded for spawner at $spawnerPos, aborting spawn.")
 			return
 		}
 
@@ -142,7 +178,7 @@ object CobbleSpawners : ModInitializer {
 			if (computed.isNotEmpty()) {
 				spawnerValidPositions[spawnerPos] = computed
 			} else {
-				logDebug("No valid spawn positions found for $spawnerPos")
+				logDebug("No valid spawn positions found for $spawnerPos", "cobblespawners")
 				return
 			}
 		}
@@ -150,7 +186,7 @@ object CobbleSpawners : ModInitializer {
 		val allPositions = spawnerValidPositions[spawnerPos] ?: emptyMap()
 		val eligible = spawnerData.selectedPokemon.filter { checkBasicSpawnConditions(serverWorld, it) == null }
 		if (eligible.isEmpty()) {
-			logDebug("No eligible Pokémon for spawner '${spawnerData.spawnerName}' at $spawnerPos")
+			logDebug("No eligible Pokémon for spawner '${spawnerData.spawnerName}' at $spawnerPos", "cobblespawners")
 			return
 		}
 
@@ -162,7 +198,7 @@ object CobbleSpawners : ModInitializer {
 
 		val maxSpawnable = spawnerData.spawnLimit - currentSpawned
 		if (maxSpawnable <= 0) {
-			logDebug("Spawn limit reached for '${spawnerData.spawnerName}'")
+			logDebug("Spawn limit reached for '${spawnerData.spawnerName}'", "cobblespawners")
 			return
 		}
 		val spawnAmount = min(spawnerData.spawnAmountPerSpawn, maxSpawnable)
@@ -179,47 +215,29 @@ object CobbleSpawners : ModInitializer {
 
 			if (validPositionsForType.isEmpty()) return@repeat
 
-			val spawnPos = validPositionsForType[random.nextInt(validPositionsForType.size)]
-			if (!serverWorld.isChunkLoaded(spawnPos.x shr 4, spawnPos.z shr 4)) return@repeat
-
-			// Convert BlockPos to Vector3i for GriefDefender interaction (if needed)
-			val vectorPos = try {
-				Class.forName("com.griefdefender.lib.flowpowered.math.vector.Vector3i")
-					.getConstructor(Int::class.java, Int::class.java, Int::class.java)
-					.newInstance(spawnPos.x, spawnPos.y, spawnPos.z)
-			} catch (e: ClassNotFoundException) {
-				null
+			// Filter the list to only include positions whose chunks are loaded.
+			val loadedPositions = validPositionsForType.filter { pos ->
+				serverWorld.getChunk(pos.x shr 4, pos.z shr 4, ChunkStatus.FULL, false) != null
 			}
 
-			// If GriefDefender is present, we attempt to bypass restrictions by forcefully spawning
-			if (griefDefenderApi != null && vectorPos != null) {
-				try {
-					val griefDefender = griefDefenderApi.javaClass
-					val claimManager = griefDefender.getMethod("getClaimManager", UUID::class.java)
-						.invoke(griefDefender, getWorldUUID(serverWorld))
-
-					val claim = claimManager.javaClass
-						.getMethod("getClaimAt", vectorPos.javaClass)
-						.invoke(claimManager, vectorPos)
-
-					if (claim != null) {
-						// Log the bypass action (this ensures we're aware of it)
-						logger.info("Bypassing GriefDefender claim protection at $spawnPos to spawn Pokémon.")
-					}
-				} catch (e: Exception) {
-					// Handle reflection errors gracefully
-					logger.warn("GriefDefender is not available, skipping claim check.")
-				}
+			if (loadedPositions.isEmpty()) {
+				println("No valid loaded spawn positions available for spawner at $spawnerPos, skipping this spawn attempt.")
+				return@repeat
 			}
 
-			// Forcefully spawn the Pokémon without regard to claim protections
+			// Pick a random loaded spawn position.
+			val spawnPos = loadedPositions[random.nextInt(loadedPositions.size)]
+
+
+
+			// Forcefully spawn the Pokémon without regard to claim protections.
 			if (attemptSpawnSinglePokemon(serverWorld, spawnPos, picked, spawnerPos)) {
 				spawnedCount++
 			}
 		}
 
 		if (spawnedCount > 0) {
-			logDebug("Spawned $spawnedCount Pokémon(s) for '${spawnerData.spawnerName}' at $spawnerPos")
+			logDebug("Spawned $spawnedCount Pokémon(s) for '${spawnerData.spawnerName}' at $spawnerPos", "cobblespawners")
 		}
 	}
 
@@ -227,8 +245,6 @@ object CobbleSpawners : ModInitializer {
 		// Create a UUID based on the world’s registry key, which uniquely identifies the world
 		return UUID.nameUUIDFromBytes(serverWorld.registryKey.value.toString().toByteArray())
 	}
-
-
 
 	private fun attemptSpawnSinglePokemon(
 		serverWorld: ServerWorld,
@@ -265,7 +281,7 @@ object CobbleSpawners : ModInitializer {
 
 		return if (serverWorld.spawnEntity(pokemonEntity)) {
 			SpawnerNBTManager.addPokemon(pokemonEntity, spawnerPos, entry.pokemonName)
-			logDebug("Spawned '${species.name}' @ $spawnPos (UUID ${pokemonEntity.uuid})")
+			logDebug("Spawned '${species.name}' @ $spawnPos (UUID ${pokemonEntity.uuid})", "cobblespawners")
 			true
 		} else {
 			logger.warn("Failed to spawn '${species.name}' at $spawnPos")
@@ -324,7 +340,7 @@ object CobbleSpawners : ModInitializer {
 			pokemon.setIV(Stats.SPECIAL_ATTACK, random.nextBetween(ivs.minIVSpecialAttack, ivs.maxIVSpecialAttack))
 			pokemon.setIV(Stats.SPECIAL_DEFENCE, random.nextBetween(ivs.minIVSpecialDefense, ivs.maxIVSpecialDefense))
 			pokemon.setIV(Stats.SPEED, random.nextBetween(ivs.minIVSpeed, ivs.maxIVSpeed))
-			logDebug("Custom IVs for '${pokemon.species.name}': ${pokemon.ivs}")
+			logDebug("Custom IVs for '${pokemon.species.name}': ${pokemon.ivs}", "cobblespawners")
 		}
 	}
 
@@ -345,7 +361,7 @@ object CobbleSpawners : ModInitializer {
 					val item = net.minecraft.registry.Registries.ITEM.get(itemId)
 					if (item != Items.AIR && random.nextDouble() * 100 <= chance) {
 						pokemon.swapHeldItem(net.minecraft.item.ItemStack(item))
-						logDebug("Assigned '$itemName' @ $chance% to '${pokemon.species.name}'")
+						logDebug("Assigned '$itemName' @ $chance% to '${pokemon.species.name}'", "cobblespawners")
 						return@forEach
 					}
 				}
@@ -388,7 +404,7 @@ object CobbleSpawners : ModInitializer {
 
 		val chunkX = spawnerPos.x shr 4
 		val chunkZ = spawnerPos.z shr 4
-		if (!world.isChunkLoaded(chunkX, chunkZ)) return emptyMap()
+		if (world.getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) == null) return emptyMap()
 
 		val minX = spawnerPos.x - data.spawnRadius.width
 		val maxX = spawnerPos.x + data.spawnRadius.width
@@ -401,7 +417,8 @@ object CobbleSpawners : ModInitializer {
 			for (y in minY..maxY) {
 				for (z in minZ..maxZ) {
 					val pos = BlockPos(x, y, z)
-					if (!world.isChunkLoaded(x shr 4, z shr 4)) continue
+					if (world.getChunk(x shr 4, z shr 4, ChunkStatus.FULL, false) == null) continue
+
 					if (isPositionSafeForSpawn(world, pos)) {
 						val location = determineSpawnLocationType(world, pos)
 						map[location]?.add(pos)
@@ -484,12 +501,6 @@ object CobbleSpawners : ModInitializer {
 			val world = server.getWorld(parseDimension(data.dimension)) ?: continue
 			val newPositions = computeValidSpawnPositions(world, data)
 			spawnerValidPositions[pos] = newPositions
-		}
-	}
-
-	private fun logDebug(message: String) {
-		if (CobbleSpawnersConfig.config.globalConfig.debugEnabled) {
-			logger.info("[DEBUG] $message")
 		}
 	}
 }

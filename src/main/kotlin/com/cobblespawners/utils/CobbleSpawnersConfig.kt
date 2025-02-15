@@ -1,9 +1,9 @@
 package com.cobblespawners.utils
 
-
 import com.blanketutils.config.ConfigData
 import com.blanketutils.config.ConfigManager
 import com.blanketutils.config.ConfigMetadata
+import com.blanketutils.utils.LogDebug
 import kotlinx.coroutines.runBlocking
 import net.minecraft.util.math.BlockPos
 import org.slf4j.LoggerFactory
@@ -113,6 +113,7 @@ data class CobbleSpawnersConfigData(
 object CobbleSpawnersConfig {
     private val logger = LoggerFactory.getLogger("CobbleSpawnersConfig")
     private const val CURRENT_VERSION = "2.0.0"
+    private const val MOD_ID = "cobblespawners" // Added mod ID for debug
 
     private lateinit var configManager: ConfigManager<CobbleSpawnersConfigData>
     private var isInitialized = false
@@ -145,11 +146,19 @@ object CobbleSpawnersConfig {
     val spawners: ConcurrentHashMap<BlockPos, SpawnerData> = ConcurrentHashMap()
     val lastSpawnTicks: ConcurrentHashMap<BlockPos, Long> = ConcurrentHashMap()
 
-    // Debug logging is now disabled.
-    private fun logDebug(message: String) { }
+    private fun logDebug(message: String) {
+        LogDebug.debug(message, MOD_ID)
+    }
+
+    private fun updateDebugState() {
+        val debugEnabled = config.globalConfig.debugEnabled
+        LogDebug.setDebugEnabledForMod(MOD_ID, debugEnabled)
+        LogDebug.debug("Debug state updated to $debugEnabled", MOD_ID)
+    }
 
     fun initializeAndLoad() {
         if (isInitialized) return
+        LogDebug.init(MOD_ID, false)
         configManager = ConfigManager(
             currentVersion = CURRENT_VERSION,
             defaultConfig = CobbleSpawnersConfigData(),
@@ -157,12 +166,14 @@ object CobbleSpawnersConfig {
             metadata = configMetadata
         )
         runBlocking { configManager.reloadConfig() }
+        updateDebugState()
         loadSpawnerDataInMemory()
         isInitialized = true
     }
 
     fun reloadBlocking() {
         runBlocking { configManager.reloadConfig() }
+        updateDebugState()
         loadSpawnerDataInMemory()
     }
 
@@ -179,7 +190,6 @@ object CobbleSpawnersConfig {
         logDebug("Spawner data saved.")
         saveConfigBlocking()
     }
-
 
     private fun roundToOneDecimal(value: Float): Float {
         return (value * 10).roundToInt() / 10f
