@@ -83,7 +83,7 @@ class BattleTracker {
     }
 
     private fun handleBattleStartPre(battleId: UUID) {
-        logDebug("Battle pre-start for Battle ID: $battleId")
+        logDebug("Battle pre-start for Battle ID: $battleId", "cobblespawners")
         ongoingBattles[battleId] = BattleInfo(
             battleId = battleId,
             actors = emptyList()
@@ -91,7 +91,7 @@ class BattleTracker {
     }
 
     private fun handleBattleStartPost(battleId: UUID, actors: List<BattleActor>) {
-        logDebug("Battle fully started for Battle ID: $battleId")
+        logDebug("Battle fully started for Battle ID: $battleId", "cobblespawners")
         val battleInfo = ongoingBattles[battleId] ?: return
         battleInfo.actors = actors
 
@@ -107,14 +107,14 @@ class BattleTracker {
         val battleId = findBattleIdByPokemon(pokemon)
         if (battleId != null) {
             if (pokemon.entity?.owner is ServerPlayerEntity) {
-                logDebug("Player swapped in Pokémon: ${pokemon.species.name}")
+                logDebug("Player swapped in Pokémon: ${pokemon.species.name}", "cobblespawners")
                 handlePlayerActivePokemon(battleId, pokemon)
             } else {
-                logDebug("Opponent swapped in Pokémon: ${pokemon.species.name}")
+                logDebug("Opponent swapped in Pokémon: ${pokemon.species.name}", "cobblespawners")
                 handleOpponentActivePokemon(battleId, pokemon)
             }
         } else {
-            logDebug("Pokémon sent out outside of tracked battle: ${pokemon.species.name}")
+            logDebug("Pokémon sent out outside of tracked battle: ${pokemon.species.name}", "cobblespawners")
         }
     }
 
@@ -136,7 +136,7 @@ class BattleTracker {
 
 
     private fun handleOpponentActivePokemon(battleId: UUID, pokemon: Pokemon?) {
-        if (pokemon == null) return logDebug("Opponent active Pokémon is null, skipping battle logic.")
+        if (pokemon == null) return logDebug("Opponent active Pokémon is null, skipping battle logic.", "cobblespawners")
 
         val battleInfo = ongoingBattles[battleId] ?: return
 

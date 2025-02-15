@@ -240,7 +240,7 @@ object EVSettingsGui {
         if (updatedEntry != null) {
             refreshGui(player, updatedEntry)
             logDebug(
-                "Updated EVs for ${updatedEntry.pokemonName} (${updatedEntry.formName ?: "Standard"}) at spawner $spawnerPos and saved to JSON."
+                "Updated EVs for ${updatedEntry.pokemonName} (${updatedEntry.formName ?: "Standard"}) at spawner $spawnerPos and saved to JSON.", "cobblespawners"
             )
         }
     }
@@ -293,7 +293,7 @@ object EVSettingsGui {
             screenHandler.sendContentUpdates()
 
             logDebug(
-                "Toggled allowCustomEvsOnDefeat for ${selectedEntry.pokemonName} (${selectedEntry.formName ?: "Standard"}) at spawner $spawnerPos."
+                "Toggled allowCustomEvsOnDefeat for ${selectedEntry.pokemonName} (${selectedEntry.formName ?: "Standard"}) at spawner $spawnerPos.", "cobblespawners"
             )
         }
     }

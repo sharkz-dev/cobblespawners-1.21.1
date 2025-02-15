@@ -289,7 +289,7 @@ object SizeSettingsGui {
             false
         )
 
-        logDebug("Toggled allowCustomSize to $status for $pokemonName (${selectedEntry.formName ?: "Standard"}) at spawner $spawnerPos.")
+        logDebug("Toggled allowCustomSize to $status for $pokemonName (${selectedEntry.formName ?: "Standard"}) at spawner $spawnerPos.", "cobblespawners")
     }
 
     /**

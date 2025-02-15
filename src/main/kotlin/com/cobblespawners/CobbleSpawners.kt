@@ -26,6 +26,17 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
 
+val griefDefenderApi: Any? = try {
+	val griefDefenderClass = Class.forName("com.griefdefender.api.GriefDefender")
+	val vector3iClass = Class.forName("com.griefdefender.lib.flowpowered.math.vector.Vector3i")
+	griefDefenderClass.newInstance()
+	vector3iClass
+} catch (e: ClassNotFoundException) {
+	null
+}
+
+
+
 object CobbleSpawners : ModInitializer {
 
 	private val logger = LoggerFactory.getLogger("cobblespawners")
@@ -85,7 +96,7 @@ object CobbleSpawners : ModInitializer {
 		val scheduler = Executors.newSingleThreadScheduledExecutor()
 		scheduler.scheduleAtFixedRate({
 			// Ensure we run spawn logic on the main server thread.
-			server.execute {
+			server.executeSync {
 				val currentTime = System.currentTimeMillis()
 				CobbleSpawnersConfig.spawners.forEach { (pos, data) ->
 					val world = server.getWorld(parseDimension(data.dimension)) ?: return@forEach
@@ -111,9 +122,7 @@ object CobbleSpawners : ModInitializer {
 		}, 0, 1000, TimeUnit.MILLISECONDS)
 	}
 
-	/**
-	 * Main spawning logic, refactored for clarity.
-	 */
+
 	private fun spawnPokemon(serverWorld: ServerWorld, spawnerData: SpawnerData) {
 		val spawnerPos = spawnerData.spawnerPos
 		val currentSpawned = SpawnerNBTManager.getPokemonCountForSpawner(serverWorld, spawnerPos)
@@ -173,6 +182,37 @@ object CobbleSpawners : ModInitializer {
 			val spawnPos = validPositionsForType[random.nextInt(validPositionsForType.size)]
 			if (!serverWorld.isChunkLoaded(spawnPos.x shr 4, spawnPos.z shr 4)) return@repeat
 
+			// Convert BlockPos to Vector3i for GriefDefender interaction (if needed)
+			val vectorPos = try {
+				Class.forName("com.griefdefender.lib.flowpowered.math.vector.Vector3i")
+					.getConstructor(Int::class.java, Int::class.java, Int::class.java)
+					.newInstance(spawnPos.x, spawnPos.y, spawnPos.z)
+			} catch (e: ClassNotFoundException) {
+				null
+			}
+
+			// If GriefDefender is present, we attempt to bypass restrictions by forcefully spawning
+			if (griefDefenderApi != null && vectorPos != null) {
+				try {
+					val griefDefender = griefDefenderApi.javaClass
+					val claimManager = griefDefender.getMethod("getClaimManager", UUID::class.java)
+						.invoke(griefDefender, getWorldUUID(serverWorld))
+
+					val claim = claimManager.javaClass
+						.getMethod("getClaimAt", vectorPos.javaClass)
+						.invoke(claimManager, vectorPos)
+
+					if (claim != null) {
+						// Log the bypass action (this ensures we're aware of it)
+						logger.info("Bypassing GriefDefender claim protection at $spawnPos to spawn Pokémon.")
+					}
+				} catch (e: Exception) {
+					// Handle reflection errors gracefully
+					logger.warn("GriefDefender is not available, skipping claim check.")
+				}
+			}
+
+			// Forcefully spawn the Pokémon without regard to claim protections
 			if (attemptSpawnSinglePokemon(serverWorld, spawnPos, picked, spawnerPos)) {
 				spawnedCount++
 			}
@@ -182,6 +222,13 @@ object CobbleSpawners : ModInitializer {
 			logDebug("Spawned $spawnedCount Pokémon(s) for '${spawnerData.spawnerName}' at $spawnerPos")
 		}
 	}
+
+	fun getWorldUUID(serverWorld: ServerWorld): UUID {
+		// Create a UUID based on the world’s registry key, which uniquely identifies the world
+		return UUID.nameUUIDFromBytes(serverWorld.registryKey.value.toString().toByteArray())
+	}
+
+
 
 	private fun attemptSpawnSinglePokemon(
 		serverWorld: ServerWorld,

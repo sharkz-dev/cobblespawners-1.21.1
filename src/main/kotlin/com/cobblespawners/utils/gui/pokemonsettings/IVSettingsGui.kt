@@ -262,7 +262,7 @@ object IVSettingsGui {
         if (updatedEntry != null) {
             refreshGui(player, updatedEntry)
             logDebug(
-                "Updated IVs for ${updatedEntry.pokemonName} (${updatedEntry.formName ?: "Standard"}) at spawner $spawnerPos and saved to JSON."
+                "Updated IVs for ${updatedEntry.pokemonName} (${updatedEntry.formName ?: "Standard"}) at spawner $spawnerPos and saved to JSON.", "cobblespawners"
             )
         }
     }
@@ -315,7 +315,7 @@ object IVSettingsGui {
             screenHandler.sendContentUpdates()
 
             logDebug(
-                "Toggled allowCustomIvs for ${selectedEntry.pokemonName} (${selectedEntry.formName ?: "Standard"}) at spawner $spawnerPos."
+                "Toggled allowCustomIvs for ${selectedEntry.pokemonName} (${selectedEntry.formName ?: "Standard"}) at spawner $spawnerPos.", "cobblespawners"
             )
         }
     }

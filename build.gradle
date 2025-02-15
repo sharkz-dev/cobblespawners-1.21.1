@@ -59,6 +59,12 @@ repositories {
 	maven {
 		url "https://maven.impactdev.net/repository/development/"
 	}
+	maven
+			{
+				name = 'griefdefender'
+				url = 'https://repo.glaremasters.me/repository/bloodshot'
+			}
+
 }
 
 loom {
@@ -92,7 +98,9 @@ dependencies {
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 	modImplementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
 
-	modImplementation(files("libs/blanketutils-1.0.0.jar"))
+	modCompileOnly(files("libs/blanketutils-1.0.1.jar"))
+
+	compileOnly group: 'com.griefdefender', name: 'api', version: '2.1.0-SNAPSHOT'
 }
 
 processResources {

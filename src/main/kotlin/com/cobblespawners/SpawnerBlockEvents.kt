@@ -59,7 +59,7 @@ object SpawnerBlockEvents {
                     val blockAtPlacement = world.getBlockState(blockPosToPlace)
 
                     if (blockAtPlacement.isAir || blockAtPlacement.block.defaultState.isReplaceable) {
-                        logDebug("Attempting to place custom spawner at $blockPosToPlace")
+                        logDebug("Attempting to place custom spawner at $blockPosToPlace", "cobblespawners")
                         placeCustomSpawner(player, world, blockPosToPlace, itemInHand)
                         return@register ActionResult.SUCCESS
                     }
@@ -187,7 +187,7 @@ object SpawnerBlockEvents {
         CobbleSpawnersConfig.saveSpawnerData()
         CobbleSpawnersConfig.saveConfigBlocking()
 
-        logDebug("Placed spawner '$spawnerName' at $pos with full configuration")
+        logDebug("Placed spawner '$spawnerName' at $pos with full configuration", "cobblespawners")
 
         CobbleSpawners.spawnerValidPositions.remove(pos)
         player.sendMessage(Text.literal("Custom spawner '$spawnerName' placed at $pos!"), false)
@@ -220,7 +220,7 @@ object SpawnerBlockEvents {
                 SpawnerNBTManager.clearPokemonForSpawner(world, blockPos);
                 CobbleSpawners.spawnerValidPositions.remove(blockPos)
                 serverPlayer.sendMessage(Text.literal("Custom spawner removed at $blockPos."), false)
-                logDebug("Custom spawner removed at $blockPos.")
+                logDebug("Custom spawner removed at $blockPos.", "cobblespawners")
             } else {
                 invalidatePositionsIfWithinRadius(world, blockPos)
             }
@@ -234,7 +234,7 @@ object SpawnerBlockEvents {
             val maxDistanceSquared = (data.spawnRadius.width * data.spawnRadius.width).toDouble()
             if (distanceSquared <= maxDistanceSquared) {
                 CobbleSpawners.spawnerValidPositions.remove(pos)
-                logDebug("Invalidated cached positions for spawner at $pos due to block change @ $changedBlockPos")
+                logDebug("Invalidated cached positions for spawner at $pos due to block change @ $changedBlockPos", "cobblespawners")
             }
         }
     }

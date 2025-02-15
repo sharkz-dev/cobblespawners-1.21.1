@@ -83,7 +83,7 @@ object SpawnSettingsGui {
                 Text.literal("Pokémon '$pokemonName' with form '${formName ?: "Standard"}' not found in spawner."),
                 false
             )
-            logDebug("Pokémon '$pokemonName' with form '${formName ?: "Standard"}' not found in spawner at $spawnerPos.")
+            logDebug("Pokémon '$pokemonName' with form '${formName ?: "Standard"}' not found in spawner at $spawnerPos.", "cobblespawners")
             return
         }
 
@@ -320,7 +320,7 @@ object SpawnSettingsGui {
         if (updatedEntry != null) {
             refreshGui(player, updatedEntry)
             logDebug(
-                "Updated spawnChance to ${updatedEntry.spawnChance}% for $pokemonName (${formName ?: "Standard"}) at spawner $spawnerPos."
+                "Updated spawnChance to ${updatedEntry.spawnChance}% for $pokemonName (${formName ?: "Standard"}) at spawner $spawnerPos.", "cobblespawners"
             )
             player.sendMessage(
                 Text.literal("Spawn Chance set to ${"%.2f".format(updatedEntry.spawnChance)}% for $pokemonName."),
@@ -351,7 +351,7 @@ object SpawnSettingsGui {
         if (updatedEntry != null) {
             refreshGui(player, updatedEntry)
             logDebug(
-                "Updated shinyChance to ${updatedEntry.shinyChance}% for $pokemonName (${formName ?: "Standard"}) at spawner $spawnerPos."
+                "Updated shinyChance to ${updatedEntry.shinyChance}% for $pokemonName (${formName ?: "Standard"}) at spawner $spawnerPos.", "cobblespawners"
             )
             player.sendMessage(
                 Text.literal("Shiny Chance set to ${"%.2f".format(updatedEntry.shinyChance)}% for $pokemonName."),
