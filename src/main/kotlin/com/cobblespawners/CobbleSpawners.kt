@@ -260,9 +260,9 @@ object CobbleSpawners : ModInitializer {
 			logger.warn("Species '$sanitized' not found at $spawnerPos")
 			return false
 		}
-
 		val level = entry.minLevel + random.nextInt(entry.maxLevel - entry.minLevel + 1)
-		val isShiny = random.nextDouble() * 100 <= entry.shinyChance
+		// Check for "shiny" in aspects in a case-insensitive way
+		val isShiny = entry.aspects.any { it.equals("shiny", ignoreCase = true) }
 		val propertiesString = buildPropertiesString(sanitized, level, isShiny, entry)
 		val properties = com.cobblemon.mod.common.api.pokemon.PokemonProperties.parse(propertiesString)
 		val pokemonEntity = properties.createEntity(serverWorld)
@@ -282,7 +282,6 @@ object CobbleSpawners : ModInitializer {
 			pokemonEntity.pitch
 		)
 
-		// If lowLevel is true, use our mixin accessor to force-add the entity.
 		val success = if (lowLevel) {
 			try {
 				(serverWorld as com.cobblespawners.mixin.ServerWorldAccessor).invokeAddFreshEntity(pokemonEntity)
@@ -305,17 +304,16 @@ object CobbleSpawners : ModInitializer {
 	}
 
 
-
-
 	private fun buildPropertiesString(
 		sanitizedName: String,
 		level: Int,
-		isShiny: Boolean,
+		isShiny: Boolean, // no longer used; aspects from the config are used instead
 		entry: PokemonSpawnEntry
 	): String {
 		val builder = StringBuilder(sanitizedName).append(" level=$level")
-		if (isShiny) {
-			builder.append(" shiny=true")
+		// Append each aspect from the config as a property (case-insensitive)
+		entry.aspects.forEach { aspect ->
+			builder.append(" ${aspect.lowercase()}=true")
 		}
 
 		val formName = entry.formName
@@ -329,11 +327,10 @@ object CobbleSpawners : ModInitializer {
 				val matchedForm = species.forms.find { form ->
 					form.formOnlyShowdownId().lowercase().replace(Regex("[^a-z0-9]"), "") == normalizedFormName
 				}
-
 				if (matchedForm != null) {
 					if (matchedForm.aspects.isNotEmpty()) {
 						matchedForm.aspects.forEach { aspect ->
-							builder.append(" $aspect=true")
+							builder.append(" ${aspect.lowercase()}=true")
 						}
 					} else {
 						builder.append(" form=${matchedForm.formOnlyShowdownId()}")
@@ -345,9 +342,10 @@ object CobbleSpawners : ModInitializer {
 				logger.warn("Species '$sanitizedName' not found while resolving form '$formName'.")
 			}
 		}
-
 		return builder.toString()
 	}
+
+
 
 	private fun applyCustomIVs(pokemon: Pokemon, entry: PokemonSpawnEntry) {
 		if (entry.ivSettings.allowCustomIvs) {
@@ -388,14 +386,37 @@ object CobbleSpawners : ModInitializer {
 	}
 
 	private fun selectPokemonByWeight(eligible: List<PokemonSpawnEntry>, totalWeight: Double): PokemonSpawnEntry? {
-		val randValue = random.nextDouble() * totalWeight
+		// Wrap the net.minecraft random instance in a kotlin.random.Random adapter.
+		val kotlinRandom = object : kotlin.random.Random() {
+			override fun nextBits(bitCount: Int): Int = random.nextInt() and ((1 shl bitCount) - 1)
+			override fun nextDouble(): Double = random.nextDouble()
+		}
+
+		// Partition eligible Pokémon into independent and competitive groups.
+		val independentEntries = eligible.filter { it.spawnChanceType == SpawnChanceType.INDEPENDENT }
+		val competitiveEntries = eligible.filter { it.spawnChanceType == SpawnChanceType.COMPETITIVE }
+
+		// For independent entries, each spawns with an absolute chance.
+		val independentSuccesses = independentEntries.filter { entry ->
+			random.nextDouble() * 100 <= entry.spawnChance
+		}
+		if (independentSuccesses.isNotEmpty()) {
+			// Randomly pick one from the successful independent entries.
+			return independentSuccesses.random(kotlinRandom)
+		}
+
+		// Otherwise, use weighted selection for competitive entries.
+		val competitiveTotalWeight = competitiveEntries.sumOf { it.spawnChance }
+		if (competitiveTotalWeight <= 0) return null
+		val randValue = kotlinRandom.nextDouble() * competitiveTotalWeight
 		var cumulative = 0.0
-		for (entry in eligible) {
+		for (entry in competitiveEntries) {
 			cumulative += entry.spawnChance
 			if (randValue <= cumulative) return entry
 		}
 		return null
 	}
+
 
 	private fun checkBasicSpawnConditions(world: ServerWorld, entry: PokemonSpawnEntry): String? {
 		val timeOfDay = world.timeOfDay % 24000

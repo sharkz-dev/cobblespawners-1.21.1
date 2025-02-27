@@ -2,10 +2,18 @@ package com.cobblespawners.utils
 
 import com.blanketutils.command.CommandManager
 import com.blanketutils.gui.setCustomName
+import com.cobblemon.mod.common.api.pokedex.entry.DexEntries
+import com.cobblemon.mod.common.api.pokemon.PokemonProperties
 import com.cobblespawners.CobbleSpawners
 import com.cobblespawners.utils.gui.SpawnerListGui
 import com.cobblespawners.utils.gui.SpawnerPokemonSelectionGui
 import com.cobblemon.mod.common.api.pokemon.PokemonSpecies
+import com.cobblemon.mod.common.api.pokemon.aspect.AspectProvider
+import com.cobblemon.mod.common.api.pokemon.aspect.SingleConditionalAspectProvider
+import com.cobblemon.mod.common.api.pokemon.feature.ChoiceSpeciesFeatureProvider
+import com.cobblemon.mod.common.api.pokemon.feature.SpeciesFeatures
+import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
+import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblespawners.api.SpawnerNBTManager
 import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.context.CommandContext
@@ -21,6 +29,7 @@ import net.minecraft.text.Text
 import net.minecraft.util.math.Vec3d
 import org.slf4j.LoggerFactory
 import net.minecraft.server.command.CommandManager.argument
+import net.minecraft.util.math.Box
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -52,6 +61,64 @@ object CommandRegistrar {
                         )
                         .executes { ctx -> handleRenameCommand(ctx) }
                 )
+            }
+
+// "inspectnearest" subcommand (updated)
+// "inspectnearest" subcommand (updated for aspect inspection)
+// "inspectnearest" subcommand (updated to log features)
+            subcommand("inspectnearest", permission = "CobbleSpawners.InspectNearest") {
+                executes { ctx ->
+                    val player = ctx.source.player as? ServerPlayerEntity
+                    if (player == null) {
+                        sendError(ctx, "Only players can use /cobblespawners inspectnearest.")
+                        return@executes 0
+                    }
+                    val pos: Vec3d = player.pos
+                    val world = player.world
+                    // Search within a 50-block radius.
+                    val searchBox = Box(pos, pos).expand(50.0)
+                    val pokemonEntities = world.getEntitiesByClass(PokemonEntity::class.java, searchBox) { true }
+                    if (pokemonEntities.isEmpty()) {
+                        sendError(ctx, "No Pokémon found nearby.")
+                        return@executes 0
+                    }
+                    // Get the nearest Pokémon.
+                    val nearest = pokemonEntities.minByOrNull { it.squaredDistanceTo(player) }!!
+                    val species = nearest.pokemon.species
+                    val currentForm = nearest.pokemon.form
+                    val aspects = nearest.pokemon.aspects
+                    val features = nearest.pokemon.features
+                    logger.info("===== Inspect Nearest Pokémon =====")
+                    logger.info("Species: ${species.name}")
+                    logger.info("Current Form: ${currentForm.name}")
+                    logger.info("Aspects: $aspects")
+                    logger.info("Features: $features")
+
+                    // Compute what the form would be if the "shulker" aspect were applied.
+                    val shulkerForm = species.getForm(setOf("shulker"))
+                    if (shulkerForm != species.standardForm) {
+                        logger.info("Computed 'Shulker' Form: ${shulkerForm.name}")
+                    } else {
+                        logger.info("No 'shulker' form available (returns standard form).")
+                    }
+
+                    // Look up the Dex entry for this species.
+                    val dexEntry = DexEntries.entries[species.resourceIdentifier]
+                    if (dexEntry != null) {
+                        logger.info("=== Dex Entry ===")
+                        logger.info("ID: ${dexEntry.id}")
+                        logger.info("Species ID: ${dexEntry.speciesId}")
+                        logger.info("Display Aspects: ${dexEntry.displayAspects}")
+                        logger.info("Condition Aspects: ${dexEntry.conditionAspects}")
+                        logger.info("Forms: ${dexEntry.forms}")
+                        logger.info("Variations: ${dexEntry.variations}")
+                    } else {
+                        logger.info("No Dex entry found for species ${species.resourceIdentifier}")
+                    }
+
+                    sendSuccess(ctx, "Inspected nearest Pokémon. Check console for details.")
+                    1
+                }
             }
 
 
@@ -231,8 +298,6 @@ object CommandRegistrar {
 
 
             // "gui" subcommand: /cobblespawners gui
-// "gui" subcommand: /cobblespawners gui <spawnerName>
-// "gui" subcommand: /cobblespawners gui [spawnerName]
             subcommand("gui", permission = "CobbleSpawners.GUI") {
                 // If no spawner name is provided, open the global spawner list GUI.
                 executes { ctx ->
@@ -259,6 +324,48 @@ object CommandRegistrar {
             }
 
 
+            subcommand("viewall", permission = "CobbleSpawners.ViewAll") {
+                then(
+                    argument("pokemonName", StringArgumentType.string())
+                        .suggests { ctx: CommandContext<ServerCommandSource>, builder: SuggestionsBuilder ->
+                            // Suggest species names using the species list.
+                            PokemonSpecies.implemented.forEach { species ->
+                                builder.suggest(species.name)
+                            }
+                            CompletableFuture.completedFuture(builder.build())
+                        }
+                        .executes { ctx ->
+                            val inputName = StringArgumentType.getString(ctx, "pokemonName")
+                            // Look up species using a case-insensitive match.
+                            val species = PokemonSpecies.species.find { it.name.equals(inputName, ignoreCase = true) }
+                            if (species == null) {
+                                sendError(ctx, "No species found for '$inputName'.")
+                                return@executes 0
+                            }
+
+                            // Get the raw features for the species via the SpeciesFeatures API.
+                            val features = SpeciesFeatures.getFeaturesFor(species)
+
+                            // Retrieve forms: if species.forms is nonempty, use that; otherwise fall back to standardForm.
+                            val forms = if (species.forms.isNotEmpty()) species.forms else listOf(species.standardForm)
+
+                            // Look up the Dex entry variations (raw JSON data) for the species.
+                            val dexEntry = DexEntries.entries[species.resourceIdentifier]
+
+                            // Build an aggregated JSON object
+                            val gson = com.google.gson.GsonBuilder().setPrettyPrinting().create()
+                            val outJson = com.google.gson.JsonObject()
+                            outJson.add("features", gson.toJsonTree(features))
+                            outJson.add("forms", gson.toJsonTree(forms))
+                            if (dexEntry != null) {
+                                outJson.add("variations", gson.toJsonTree(dexEntry.variations))
+                            }
+
+                            sendSuccess(ctx, "Raw data for ${species.name}:\n" + gson.toJson(outJson))
+                            1
+                        }
+                )
+            }
 
             // "reload" subcommand: /cobblespawners reload
             subcommand("reload", permission = "CobbleSpawners.Reload") {
@@ -377,7 +484,6 @@ object CommandRegistrar {
             pokemonName = pokemonName,
             formName = selectedForm,
             spawnChance = 50.0,
-            shinyChance = 0.0,
             minLevel = 1,
             maxLevel = 100,
             captureSettings = CaptureSettings(

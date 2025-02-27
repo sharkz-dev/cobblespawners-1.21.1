@@ -73,8 +73,9 @@ data class HeldItemsOnSpawn(
 data class PokemonSpawnEntry(
     val pokemonName: String,
     var formName: String? = null,
+    var aspects: Set<String> = emptySet(), // New field for aspects
     var spawnChance: Double,
-    var shinyChance: Double,
+    var spawnChanceType: SpawnChanceType = SpawnChanceType.COMPETITIVE, // New chance type field
     var minLevel: Int,
     var maxLevel: Int,
     var sizeSettings: SizeSettings = SizeSettings(),
@@ -84,6 +85,15 @@ data class PokemonSpawnEntry(
     val spawnSettings: SpawnSettings,
     var heldItemsOnSpawn: HeldItemsOnSpawn = HeldItemsOnSpawn()
 )
+
+
+enum class SpawnChanceType {
+    /** Spawns relative to the presence of other Pokémon in the spawner. */
+    COMPETITIVE,
+
+    /** Spawns independently based on an absolute chance. */
+    INDEPENDENT
+}
 
 data class SpawnRadius(
     var width: Int = 4,
@@ -104,7 +114,7 @@ data class SpawnerData(
 )
 
 data class CobbleSpawnersConfigData(
-    override val version: String = "2.0.1",
+    override val version: String = "2.0.2",
     override val configId: String = "cobblespawners",
 
     var globalConfig: GlobalConfig = GlobalConfig(),
@@ -113,7 +123,7 @@ data class CobbleSpawnersConfigData(
 
 object CobbleSpawnersConfig {
     private val logger = LoggerFactory.getLogger("CobbleSpawnersConfig")
-    private const val CURRENT_VERSION = "2.0.1"
+    private const val CURRENT_VERSION = "2.0.2"
     private const val MOD_ID = "cobblespawners" // Added mod ID for debug
 
     private lateinit var configManager: ConfigManager<CobbleSpawnersConfigData>
@@ -271,6 +281,22 @@ object CobbleSpawnersConfig {
         }
     }
 
+    // Overloaded version to check for aspects
+    fun getPokemonSpawnEntry(
+        spawnerPos: BlockPos,
+        pokemonName: String,
+        formName: String,
+        aspects: Set<String> = emptySet()
+    ): PokemonSpawnEntry? {
+        val spawnerData = spawners[spawnerPos] ?: return null
+        return spawnerData.selectedPokemon.find {
+            it.pokemonName.equals(pokemonName, ignoreCase = true) &&
+                    (it.formName?.equals(formName, ignoreCase = true) ?: (formName == null)) &&
+                    it.aspects.map { a -> a.lowercase() }.toSet() == aspects.map { a -> a.lowercase() }.toSet()
+        }
+    }
+
+
     fun addPokemonSpawnEntry(spawnerPos: BlockPos, entry: PokemonSpawnEntry): Boolean {
         val spawnerData = spawners[spawnerPos] ?: return false
         if (spawnerData.selectedPokemon.any {
@@ -303,6 +329,64 @@ object CobbleSpawnersConfig {
         }
     }
 
+    fun addDefaultPokemonToSpawner(
+        spawnerPos: BlockPos,
+        pokemonName: String,
+        formName: String?,
+        aspects: Set<String> = emptySet()
+    ): Boolean {
+        val spawnerData = spawners[spawnerPos] ?: return false
+        if (spawnerData.selectedPokemon.any {
+                it.pokemonName.equals(pokemonName, ignoreCase = true) &&
+                        (it.formName?.equals(formName, ignoreCase = true) ?: (formName == null)) &&
+                        it.aspects.map { a -> a.lowercase() }.toSet() == aspects.map { a -> a.lowercase() }.toSet()
+            }) {
+            logDebug("Pokémon with specified aspects already exists in spawner")
+            return false
+        }
+        val newEntry = createDefaultPokemonEntry(pokemonName, formName, aspects)
+        val updatedPokemonList = spawnerData.selectedPokemon.toMutableList().apply { add(newEntry) }
+        spawners[spawnerPos] = spawnerData.copy(selectedPokemon = updatedPokemonList)
+        config.spawners.find { it.spawnerPos == spawnerPos }?.selectedPokemon = updatedPokemonList
+        saveSpawnerData()
+        return true
+    }
+
+
+    fun removeAndSavePokemonFromSpawner(
+        spawnerPos: BlockPos,
+        pokemonName: String,
+        formName: String?,
+        aspects: Set<String> = emptySet()
+    ): Boolean {
+        val spawnerData = spawners[spawnerPos] ?: return false
+        val updatedPokemonList = spawnerData.selectedPokemon.toMutableList()
+        val removed = updatedPokemonList.removeIf {
+            it.pokemonName.equals(pokemonName, ignoreCase = true) &&
+                    (it.formName?.equals(formName, ignoreCase = true) ?: (formName == null)) &&
+                    it.aspects.map { a -> a.lowercase() }.toSet() == aspects.map { a -> a.lowercase() }.toSet()
+        }
+        if (removed) {
+            spawners[spawnerPos] = spawnerData.copy(selectedPokemon = updatedPokemonList)
+            config.spawners.find { it.spawnerPos == spawnerPos }?.selectedPokemon = updatedPokemonList
+            saveSpawnerData()
+            return true
+        }
+        return false
+    }
+
+
+    fun removeAndSaveSpawner(spawnerPos: BlockPos): Boolean {
+        val removed = spawners.remove(spawnerPos) != null
+        if (removed) {
+            config.spawners.removeIf { it.spawnerPos == spawnerPos }
+            lastSpawnTicks.remove(spawnerPos)
+            saveSpawnerData()
+            return true
+        }
+        return false
+    }
+
     fun saveConfigBlocking() {
         runBlocking {
             configManager.saveConfig(configManager.getCurrentConfig())
@@ -328,66 +412,25 @@ object CobbleSpawnersConfig {
         return spawnerData
     }
 
-    fun createDefaultPokemonEntry(pokemonName: String, formName: String? = null): PokemonSpawnEntry {
+    fun createDefaultPokemonEntry(
+        pokemonName: String,
+        formName: String? = null,
+        aspects: Set<String> = emptySet()
+    ): PokemonSpawnEntry {
         return PokemonSpawnEntry(
             pokemonName = pokemonName,
             formName = formName,
+            aspects = aspects,
             spawnChance = 50.0,
-            shinyChance = 0.0,
+            spawnChanceType = SpawnChanceType.COMPETITIVE,
             minLevel = 1,
             maxLevel = 100,
             sizeSettings = SizeSettings(allowCustomSize = false, minSize = 1.0f, maxSize = 1.0f),
             captureSettings = CaptureSettings(isCatchable = true, restrictCaptureToLimitedBalls = false, requiredPokeBalls = listOf("poke_ball")),
-            ivSettings = IVSettings(allowCustomIvs = false, minIVHp = 0, maxIVHp = 31, minIVAttack = 0, maxIVAttack = 31,
-                minIVDefense = 0, maxIVDefense = 31, minIVSpecialAttack = 0, maxIVSpecialAttack = 31,
-                minIVSpecialDefense = 0, maxIVSpecialDefense = 31, minIVSpeed = 0, maxIVSpeed = 31),
-            evSettings = EVSettings(allowCustomEvsOnDefeat = false, evHp = 0, evAttack = 0, evDefense = 0, evSpecialAttack = 0, evSpecialDefense = 0, evSpeed = 0),
-            spawnSettings = SpawnSettings(spawnTime = "ALL", spawnWeather = "ALL", spawnLocation = "ALL"),
-            heldItemsOnSpawn = HeldItemsOnSpawn(allowHeldItemsOnSpawn = false, itemsWithChance = mapOf("minecraft:cobblestone" to 0.1, "cobblemon:pokeball" to 100.0))
+            ivSettings = IVSettings(),
+            evSettings = EVSettings(),
+            spawnSettings = SpawnSettings(),
+            heldItemsOnSpawn = HeldItemsOnSpawn()
         )
-    }
-
-    fun addDefaultPokemonToSpawner(spawnerPos: BlockPos, pokemonName: String, formName: String?): Boolean {
-        val spawnerData = spawners[spawnerPos] ?: return false
-        if (spawnerData.selectedPokemon.any {
-                it.pokemonName.equals(pokemonName, ignoreCase = true) &&
-                        (it.formName?.equals(formName, ignoreCase = true) ?: (formName == null))
-            }) {
-            logDebug("Pokémon already exists in spawner")
-            return false
-        }
-        val newEntry = createDefaultPokemonEntry(pokemonName, formName)
-        val updatedPokemonList = spawnerData.selectedPokemon.toMutableList().apply { add(newEntry) }
-        spawners[spawnerPos] = spawnerData.copy(selectedPokemon = updatedPokemonList)
-        config.spawners.find { it.spawnerPos == spawnerPos }?.selectedPokemon = updatedPokemonList
-        saveSpawnerData()
-        return true
-    }
-
-    fun removeAndSavePokemonFromSpawner(spawnerPos: BlockPos, pokemonName: String, formName: String?): Boolean {
-        val spawnerData = spawners[spawnerPos] ?: return false
-        val updatedPokemonList = spawnerData.selectedPokemon.toMutableList()
-        val removed = updatedPokemonList.removeIf {
-            it.pokemonName.equals(pokemonName, ignoreCase = true) &&
-                    (it.formName?.equals(formName, ignoreCase = true) ?: (formName == null))
-        }
-        if (removed) {
-            spawners[spawnerPos] = spawnerData.copy(selectedPokemon = updatedPokemonList)
-            config.spawners.find { it.spawnerPos == spawnerPos }?.selectedPokemon = updatedPokemonList
-            saveSpawnerData()
-            return true
-        }
-        return false
-    }
-
-    fun removeAndSaveSpawner(spawnerPos: BlockPos): Boolean {
-        val removed = spawners.remove(spawnerPos) != null
-        if (removed) {
-            config.spawners.removeIf { it.spawnerPos == spawnerPos }
-            lastSpawnTicks.remove(spawnerPos)
-            saveSpawnerData()
-            return true
-        }
-        return false
     }
 }

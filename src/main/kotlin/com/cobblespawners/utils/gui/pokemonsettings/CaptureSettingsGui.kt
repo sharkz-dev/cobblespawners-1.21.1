@@ -6,6 +6,7 @@ import com.cobblespawners.utils.gui.SpawnerPokemonSelectionGui.spawnerGuisOpen
 import com.blanketutils.gui.CustomGui
 import com.blanketutils.gui.InteractionContext
 import com.blanketutils.gui.setCustomName
+import com.cobblespawners.utils.gui.PokemonEditSubGui
 import net.minecraft.component.DataComponentTypes
 import net.minecraft.component.type.LoreComponent
 import net.minecraft.inventory.Inventory
@@ -21,6 +22,20 @@ import org.slf4j.LoggerFactory
 object CaptureSettingsGui {
     private val logger = LoggerFactory.getLogger(CaptureSettingsGui::class.java)
 
+    // GUI slot configuration
+    private object Slots {
+        const val CATCHABLE_TOGGLE = 21
+        const val RESTRICT_CAPTURE = 23
+        const val BACK_BUTTON = 49
+    }
+
+    // Texture constants
+    private object Textures {
+        const val CATCHABLE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTNlNjg3NjhmNGZhYjgxYzk0ZGY3MzVlMjA1YzNiNDVlYzQ1YTY3YjU1OGYzODg0NDc5YTYyZGQzZjRiZGJmOCJ9fX0="
+        const val RESTRICT = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOWQ0MDhjNTY5OGYyZDdhOGExNDE1ZWY5NTkyYWViNGJmNjJjOWFlN2NjZjE4ODQ5NzUzMGJmM2M4Yjk2NDhlNSJ9fX0="
+        const val BACK = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNzI0MzE5MTFmNDE3OGI0ZDJiNDEzYWE3ZjVjNzhhZTQ0NDdmZTkyNDY5NDNjMzFkZjMxMTYzYzBlMDQzZTBkNiJ9fX0="
+    }
+
     /**
      * Opens the Capture Settings GUI for a specific Pokémon and form.
      */
@@ -28,100 +43,139 @@ object CaptureSettingsGui {
         player: ServerPlayerEntity,
         spawnerPos: BlockPos,
         pokemonName: String,
-        formName: String?
+        formName: String?,
+        additionalAspects: Set<String>
     ) {
-        val selectedEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName)
+        // Get the standardized form name and Pokémon entry
+        val standardFormName = formName ?: "Standard"
+        val selectedEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, standardFormName, additionalAspects)
+
         if (selectedEntry == null) {
             player.sendMessage(
-                Text.literal("Pokémon '$pokemonName' with form '${formName ?: "Standard"}' not found in spawner."),
+                Text.literal("Pokémon '$pokemonName' with form '$standardFormName' and aspects ${if (additionalAspects.isEmpty()) "none" else additionalAspects.joinToString(", ")} not found in spawner."),
                 false
             )
-            logger.warn("Pokémon '$pokemonName' with form '${formName ?: "Standard"}' not found in spawner at $spawnerPos.")
+            logger.warn("Pokémon '$pokemonName' with form '$standardFormName' with aspects ${additionalAspects.joinToString(", ")} not found in spawner at $spawnerPos.")
             return
         }
 
-        val layout = generateCaptureSettingsLayout(selectedEntry)
-
+        // Track open GUI
         spawnerGuisOpen[spawnerPos] = player
 
-        val onInteract: (InteractionContext) -> Unit = { context ->
-            when (context.slotIndex) {
-                21 -> { // Toggle catchable status
-                    if (context.clickType == ClickType.LEFT) {
-                        toggleIsCatchable(spawnerPos, pokemonName, formName, player)
-                        updateGuiItem(context, player, "Catchable", selectedEntry.captureSettings.isCatchable, Formatting.GREEN)
-                    }
-                }
-                23 -> { // Toggle restricted capture or open Poké Ball selection
-                    if (context.clickType == ClickType.LEFT) {
-                        toggleRestrictCapture(spawnerPos, pokemonName, formName, player)
-                        updateGuiItem(context, player, "Restrict Capture To Limited Balls", selectedEntry.captureSettings.restrictCaptureToLimitedBalls, Formatting.RED)
-                    } else if (context.clickType == ClickType.RIGHT) {
-                        CaptureBallSettingsGui.openCaptureBallSettingsGui(player, spawnerPos, pokemonName, formName)
-                    }
-                }
-                49 -> { // Back button
-                    CustomGui.closeGui(player)
-                    SpawnerPokemonSelectionGui.openPokemonEditSubGui(player, spawnerPos, pokemonName, formName)
-                }
-            }
-        }
+        // Build the title including the aspects
+        val aspectsDisplay = if (additionalAspects.isNotEmpty()) additionalAspects.joinToString(", ") else ""
+        val guiTitle = if (aspectsDisplay.isNotEmpty())
+            "Edit Capture Settings for ${selectedEntry.pokemonName} (${selectedEntry.formName ?: "Standard"}, $aspectsDisplay)"
+        else
+            "Edit Capture Settings for ${selectedEntry.pokemonName} (${selectedEntry.formName ?: "Standard"})"
 
-        val onClose: (Inventory) -> Unit = {
-            spawnerGuisOpen.remove(spawnerPos)
-            player.sendMessage(
-                Text.literal("Capture Settings GUI closed for $pokemonName (${selectedEntry.formName ?: "Standard"})"),
-                false
-            )
-        }
-
+        // Generate layout and open GUI
         CustomGui.openGui(
             player,
-            "Edit Capture Settings for $pokemonName (${selectedEntry.formName ?: "Standard"})",
-            layout,
-            onInteract,
-            onClose
+            guiTitle,
+            generateCaptureSettingsLayout(selectedEntry),
+            { context -> handleInteraction(context, player, spawnerPos, pokemonName, formName, additionalAspects, selectedEntry) },
+            { handleClose(it, spawnerPos, pokemonName, selectedEntry.formName) }
         )
     }
 
+    /**
+     * Handles GUI interactions
+     */
+    private fun handleInteraction(
+        context: InteractionContext,
+        player: ServerPlayerEntity,
+        spawnerPos: BlockPos,
+        pokemonName: String,
+        formName: String?,
+        additionalAspects: Set<String>,
+        selectedEntry: PokemonSpawnEntry
+    ) {
+        when (context.slotIndex) {
+            Slots.CATCHABLE_TOGGLE -> {
+                if (context.clickType == ClickType.LEFT) {
+                    toggleIsCatchable(spawnerPos, pokemonName, formName, player)
+                    updateGuiItem(context, player, "Catchable", !selectedEntry.captureSettings.isCatchable, Formatting.GREEN)
+                }
+            }
+            Slots.RESTRICT_CAPTURE -> {
+                if (context.clickType == ClickType.LEFT) {
+                    toggleRestrictCapture(spawnerPos, pokemonName, formName, player)
+                    updateGuiItem(context, player, "Restrict Capture To Limited Balls", !selectedEntry.captureSettings.restrictCaptureToLimitedBalls, Formatting.RED)
+                } else if (context.clickType == ClickType.RIGHT) {
+                    CaptureBallSettingsGui.openCaptureBallSettingsGui(player, spawnerPos, pokemonName, formName, additionalAspects)
+                }
+            }
+            Slots.BACK_BUTTON -> {
+                CustomGui.closeGui(player)
+                PokemonEditSubGui.openPokemonEditSubGui(player, spawnerPos, pokemonName, formName, additionalAspects)
+            }
+        }
+    }
+
+    /**
+     * Handles GUI close
+     */
+    private fun handleClose(
+        inventory: Inventory,
+        spawnerPos: BlockPos,
+        pokemonName: String,
+        formName: String?
+    ) {
+        spawnerGuisOpen.remove(spawnerPos)
+        // No need to send message to player here as they might be null
+    }
+
+    /**
+     * Generates the layout for the Capture Settings GUI
+     */
     private fun generateCaptureSettingsLayout(selectedEntry: PokemonSpawnEntry): List<ItemStack> {
-        val layout = MutableList(54) { createFillerPane() }  // Default filler panes in all slots
+        val layout = MutableList(54) { createFillerPane() }
 
-        // Toggle isCatchable button (player head) at slot 19
-        layout[21] = createIsCatchableHeadButton(selectedEntry.captureSettings.isCatchable)
+        // Add toggle buttons
+        layout[Slots.CATCHABLE_TOGGLE] = createToggleButton(
+            "Catchable",
+            Formatting.GREEN,
+            selectedEntry.captureSettings.isCatchable,
+            "Left-click to toggle catchable status",
+            Textures.CATCHABLE
+        )
 
-        // Toggle restrictCaptureToLimitedBalls button (right-click to edit balls) at slot 23
-        layout[23] = createRestrictCaptureHeadButton(selectedEntry.captureSettings.restrictCaptureToLimitedBalls)
+        layout[Slots.RESTRICT_CAPTURE] = createRestrictCaptureButton(selectedEntry.captureSettings.restrictCaptureToLimitedBalls)
 
-        // Back button (player head) at slot 49
-        layout[49] = createBackHeadButton()
+        // Add back button
+        layout[Slots.BACK_BUTTON] = createBackButton()
 
         return layout
     }
 
-    private fun createFillerPane(): ItemStack {
-        return ItemStack(Items.GRAY_STAINED_GLASS_PANE).apply {
-            setCustomName(Text.literal(" "))  // Just a blank filler pane
-        }
-    }
-
-    private fun createIsCatchableHeadButton(isCatchable: Boolean): ItemStack {
-        val textureValue = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTNlNjg3NjhmNGZhYjgxYzk0ZGY3MzVlMjA1YzNiNDVlYzQ1YTY3YjU1OGYzODg0NDc5YTYyZGQzZjRiZGJmOCJ9fX0=" // Replace with actual texture
+    /**
+     * Creates a toggle button
+     */
+    private fun createToggleButton(
+        text: String,
+        color: Formatting,
+        isEnabled: Boolean,
+        description: String,
+        textureValue: String
+    ): ItemStack {
         return CustomGui.createPlayerHeadButton(
-            "CatchableToggle",
-            Text.literal("Catchable").styled { it.withColor(Formatting.GREEN).withBold(false).withItalic(false) },
+            "${text.replace(" ", "")}Toggle",
+            Text.literal(text).styled { it.withColor(color).withBold(false).withItalic(false) },
             listOf(
-                Text.literal("Left-click to toggle catchable status").styled { it.withColor(Formatting.GRAY).withItalic(false) },
-                Text.literal("Status: ${if (isCatchable) "ON" else "OFF"}").styled {
-                    it.withColor(if (isCatchable) Formatting.GREEN else Formatting.GRAY).withItalic(false)
+                Text.literal(description).styled { it.withColor(Formatting.GRAY).withItalic(false) },
+                Text.literal("Status: ${if (isEnabled) "ON" else "OFF"}").styled {
+                    it.withColor(if (isEnabled) Formatting.GREEN else Formatting.GRAY).withItalic(false)
                 }
             ),
             textureValue
         )
     }
 
-    private fun createRestrictCaptureHeadButton(restrictCapture: Boolean): ItemStack {
-        val textureValue = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOWQ0MDhjNTY5OGYyZDdhOGExNDE1ZWY5NTkyYWViNGJmNjJjOWFlN2NjZjE4ODQ5NzUzMGJmM2M4Yjk2NDhlNSJ9fX0="
+    /**
+     * Creates the restrict capture button
+     */
+    private fun createRestrictCaptureButton(restrictCapture: Boolean): ItemStack {
         return CustomGui.createPlayerHeadButton(
             "RestrictCaptureToggle",
             Text.literal("Restrict Capture To Limited Balls").styled { it.withColor(Formatting.RED).withBold(false).withItalic(false) },
@@ -132,20 +186,34 @@ object CaptureSettingsGui {
                 },
                 Text.literal("Right-click to edit required Poké Balls").styled { it.withColor(Formatting.GRAY).withItalic(false) },
             ),
-            textureValue
+            Textures.RESTRICT
         )
     }
 
-    private fun createBackHeadButton(): ItemStack {
-        val textureValue = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNzI0MzE5MTFmNDE3OGI0ZDJiNDEzYWE3ZjVjNzhhZTQ0NDdmZTkyNDY5NDNjMzFkZjMxMTYzYzBlMDQzZTBkNiJ9fX0="
+    /**
+     * Creates a back button
+     */
+    private fun createBackButton(): ItemStack {
         return CustomGui.createPlayerHeadButton(
             "BackButton",
             Text.literal("Back").styled { it.withColor(Formatting.WHITE).withBold(false).withItalic(false) },
             listOf(Text.literal("Return to previous menu").styled { it.withColor(Formatting.GRAY).withItalic(false) }),
-            textureValue
+            Textures.BACK
         )
     }
 
+    /**
+     * Creates a filler pane
+     */
+    private fun createFillerPane(): ItemStack {
+        return ItemStack(Items.GRAY_STAINED_GLASS_PANE).apply {
+            setCustomName(Text.literal(" "))
+        }
+    }
+
+    /**
+     * Toggles whether the Pokémon is catchable
+     */
     private fun toggleIsCatchable(
         spawnerPos: BlockPos,
         pokemonName: String,
@@ -158,6 +226,9 @@ object CaptureSettingsGui {
         player.sendMessage(Text.literal("Toggled catchable state for $pokemonName."), false)
     }
 
+    /**
+     * Toggles whether capture is restricted to specific balls
+     */
     private fun toggleRestrictCapture(
         spawnerPos: BlockPos,
         pokemonName: String,
@@ -170,26 +241,34 @@ object CaptureSettingsGui {
         player.sendMessage(Text.literal("Toggled restricted capture for $pokemonName."), false)
     }
 
-    private fun updateGuiItem(context: InteractionContext, player: ServerPlayerEntity, settingName: String, newValue: Boolean, color: Formatting) {
+    /**
+     * Updates a GUI item to reflect a new setting value
+     */
+    private fun updateGuiItem(
+        context: InteractionContext,
+        player: ServerPlayerEntity,
+        settingName: String,
+        newValue: Boolean,
+        color: Formatting
+    ) {
         val itemStack = context.clickedStack
 
-        // Set custom name via DataComponents
+        // Set custom name
         itemStack.setCustomName(
             Text.literal(settingName).styled {
                 it.withColor(color).withBold(false).withItalic(false)
             }
         )
 
-        // Retrieve the current lore from DataComponents
+        // Update lore
         val oldLoreComponent = itemStack.getOrDefault(DataComponentTypes.LORE, LoreComponent(emptyList()))
         val oldLore = oldLoreComponent.lines.toMutableList()
 
-        // Attempt to find and update the "Status:" line
+        // Find and update the "Status:" line
         var updatedStatus = false
         for (i in oldLore.indices) {
             val line = oldLore[i]
             if (line.string.contains("Status:", ignoreCase = true)) {
-                // Replace this line with the new status line
                 oldLore[i] = Text.literal("Status: ${if (newValue) "ON" else "OFF"}").styled { s ->
                     s.withColor(if (newValue) Formatting.GREEN else Formatting.GRAY).withItalic(false)
                 }
@@ -198,7 +277,7 @@ object CaptureSettingsGui {
             }
         }
 
-        // If no "Status:" line was found, add a new line
+        // If no "Status:" line was found, add a new one
         if (!updatedStatus) {
             oldLore.add(
                 Text.literal("Status: ${if (newValue) "ON" else "OFF"}").styled { s ->
@@ -207,12 +286,11 @@ object CaptureSettingsGui {
             )
         }
 
-        // Update the lore using DataComponents
+        // Update the lore
         itemStack.set(DataComponentTypes.LORE, LoreComponent(oldLore))
 
-        // Update the item in the player's screen
+        // Update the item in the GUI
         player.currentScreenHandler.slots[context.slotIndex].stack = itemStack
         player.currentScreenHandler.sendContentUpdates()
     }
-
 }

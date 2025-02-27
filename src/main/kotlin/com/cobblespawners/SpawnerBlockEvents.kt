@@ -113,7 +113,6 @@ object SpawnerBlockEvents {
             pokemonName = "", // Will be set when pokemon is selected
             formName = null,
             spawnChance = 100.0,
-            shinyChance = 1.0,
             minLevel = 1,
             maxLevel = 100,
             sizeSettings = SizeSettings(

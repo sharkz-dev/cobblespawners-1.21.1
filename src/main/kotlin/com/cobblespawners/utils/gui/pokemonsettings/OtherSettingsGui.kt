@@ -5,6 +5,7 @@ import com.cobblespawners.utils.gui.SpawnerPokemonSelectionGui
 import com.blanketutils.gui.CustomGui
 import com.blanketutils.gui.InteractionContext
 import com.blanketutils.gui.setCustomName
+import com.cobblespawners.utils.gui.PokemonEditSubGui
 import com.cobblespawners.utils.gui.SpawnerPokemonSelectionGui.spawnerGuisOpen
 import net.minecraft.inventory.Inventory
 import net.minecraft.item.ItemStack
@@ -21,7 +22,13 @@ object OtherSettingsGui {
     /**
      * Opens the Other Editable GUI for a specific Pokémon and form.
      */
-    fun openOtherEditableGui(player: ServerPlayerEntity, spawnerPos: BlockPos, pokemonName: String, formName: String?) {
+    fun openOtherEditableGui(
+        player: ServerPlayerEntity,
+        spawnerPos: BlockPos,
+        pokemonName: String,
+        formName: String?,
+        additionalAspects: Set<String>
+    ) {
         val selectedEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName)
         if (selectedEntry == null) {
             player.sendMessage(
@@ -77,11 +84,13 @@ object OtherSettingsGui {
                     logger.debug("Back button clicked.")
                     CustomGui.closeGui(player)
                     player.sendMessage(Text.literal("Returning to Edit Pokémon menu"), false)
-                    SpawnerPokemonSelectionGui.openPokemonEditSubGui(
+                    // Pass additionalAspects when opening the previous menu
+                    PokemonEditSubGui.openPokemonEditSubGui(
                         player,
                         spawnerPos,
                         pokemonName,
-                        formName
+                        formName,
+                        additionalAspects
                     )
                 }
                 else -> {
@@ -138,9 +147,9 @@ object OtherSettingsGui {
      */
     private fun createSpawnTimeHeadButton(spawnTime: String): ItemStack {
         val textureValue = when (spawnTime) {
-            "DAY" -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZWQyZmYwOWNmNmU3OTNjYTg4NzFiNDYwNzBkMWE1ODJmZGMxNmU3YjlmYmE2N2QzYzA4ZjE1YzZlNDdlYjY0NSJ9fX0=" // Replace with actual base64 texture
-            "NIGHT" -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTk1MTRiMGY2N2E4YTFhMGJmODNjMmY4ODE3NTViNjA1MWIyYmQ0MmVlMzMwMjM0NGM1MzE1YWI3ZWQzNjk2ZSJ9fX0=" // Replace with actual base64 texture
-            else -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZDY2MzM5ZWQxYmEzOGY0Mzk5MWQzMDM3OTAyYzBhNWUzMjA0MzE1OGFkZDBjOTQ2MTZlYjMyZmVhYmZlNTc5YyJ9fX0=" // Replace with actual base64 texture
+            "DAY" -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZWQyZmYwOWNmNmU3OTNjYTg4NzFiNDYwNzBkMWE1ODJmZGMxNmU3YjlmYmE2N2QzYzA4ZjE1YzZlNDdlYjY0NSJ9fX0="
+            "NIGHT" -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTk1MTRiMGY2N2E4YTFhMGJmODNjMmY4ODE3NTViNjA1MWIyYmQ0MmVlMzMwMjM0NGM1MzE1YWI3ZWQzNjk2ZSJ9fX0="
+            else -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZDY2MzM5ZWQxYmEzOGY0Mzk5MWQzMDM3OTAyYzBhNWUzMjA0MzE1OGFkZDBjOTQ2MTZlYjMyZmVhYmZlNTc5YyJ9fX0="
         }
 
         return CustomGui.createPlayerHeadButton(
@@ -159,10 +168,10 @@ object OtherSettingsGui {
      */
     private fun createSpawnWeatherHeadButton(spawnWeather: String): ItemStack {
         val textureValue = when (spawnWeather) {
-            "CLEAR" -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMjUwZTI3NmZhMTc4NjVmNGZkZjI4MjMxZjBlNGQzODlhMDUyYjAzZTlhZjE0MzhkMzExMTk5ZGU3ODY3MmFjZSJ9fX0=" // Replace with actual base64 texture
-            "RAIN" -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTI5MmQxNzI2MTcxYWJhYmY3M2Y4NDQxMTU0Y2Y3YjcyZWUyZTBlNDY0NGQ2ZWUwODM4ZDc2MGRjMzQ4OWM5MiJ9fX0=" // Replace with actual base64 texture
-            "THUNDER" -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMzNkNjlhNjBkOTcwYWQwYjhhYTE1ODk3OTE0ZjVhYWMyNjVlOTllNmY1MDE2YTdkOGFhN2JlOWFjMDNiNjE0OCJ9fX0=" // Replace with actual base64 texture
-            else -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNjVmMzc4MjYxNjFjNzkyZDdmNmM5MjBiMmZhMDZiODhlNjg0NTI4OGFiMDJhZDliNjVkNGJiZjVjYTJjZTFlMyJ9fX0=" // Replace with actual base64 texture
+            "CLEAR" -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMjUwZTI3NmZhMTc4NjVmNGZkZjI4MjMxZjBlNGQzODlhMDUyYjAzZTlhZjE0MzhkMzExMTk5ZGU3ODY3MmFjZSJ9fX0="
+            "RAIN" -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTI5MmQxNzI2MTcxYWJhYmY3M2Y4NDQxMTU0Y2Y3YjcyZWUyZTBlNDY0NGQ2ZWUwODM4ZDc2MGRjMzQ4OWM5MiJ9fX0="
+            "THUNDER" -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMzNkNjlhNjBkOTcwYWQwYjhhYTE1ODk3OTE0ZjVhYWMyNjVlOTllNmY1MDE2YTdkOGFhN2JlOWFjMDNiNjE0OCJ9fX0="
+            else -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNjVmMzc4MjYxNjFjNzkyZDdmNmM5MjBiMmZhMDZiODhlNjg0NTI4OGFiMDJhZDliNjVkNGJiZjVjYTJjZTFlMyJ9fX0="
         }
 
         return CustomGui.createPlayerHeadButton(
@@ -181,10 +190,10 @@ object OtherSettingsGui {
      */
     private fun createSpawnLocationHeadButton(spawnLocation: String): ItemStack {
         val textureValue = when (spawnLocation) {
-            "SURFACE" -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYzAyNzU4YjJkZjU2ZTg1MGZmMTZhMDVhODExNTk2MmUyYmEyZTdiYWNhYjIwZjcwODVmMGQ0YjUzYmJiODA1YyJ9fX0=" // Replace with actual base64 texture
-            "UNDERGROUND" -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvY2M1ODNmNzE1MDlkMDI2MmUzZGMzZjFkMWE0YzZhMWZhNjA0ZWMxN2NjMjA4NjVkOGE2ZDdiOWM2YTQ4YWUwYSJ9fX0=" // Replace with actual base64 texture
-            "WATER" -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMzcyNWM4YWRiOWZlNmIzNGI0ODc0MGExMzBjZWM0NGIyODI1ZmUzMmRhZDE5ODU3MDA1MGVlNGI0ZWRhZGYzMyJ9fX0=" // Replace with actual base64 texture
-            else -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZDVlZDJlZjMyN2RkYTZmMmRlYmU3YzI0MWNmMjFjNWVmMGI3MzdiZjYxMTc4N2ZlNGJmNTM5YzhhNTcyMDM2In19fQ==" // Replace with actual base64 texture
+            "SURFACE" -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYzAyNzU4YjJkZjU2ZTg1MGZmMTZhMDVhODExNTk2MmUyYmEyZTdiYWNhYjIwZjcwODVmMGQ0YjUzYmJiODA1YyJ9fX0="
+            "UNDERGROUND" -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvY2M1ODNmNzE1MDlkMDI2MmUzZGMzZjFkMWE0YzZhMWZhNjA0ZWMxN2NjMjA4NjVkOGE2ZDdiOWM2YTQ4YWUwYSJ9fX0="
+            "WATER" -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMzcyNWM4YWRiOWZlNmIzNGI0ODc0MGExMzBjZWM0NGIyODI1ZmUzMmRhZDE5ODU3MDA1MGVlNGI0ZWRhZGYzMyJ9fX0="
+            else -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZDVlZDJlZjMyN2RkYTZmMmRlYmU3YzI0MWNmMjFjNWVmMGI3MzdiZjYxMTc4N2ZlNGJmNTM5YzhhNTcyMDM2In19fQ=="
         }
 
         return CustomGui.createPlayerHeadButton(
@@ -202,8 +211,7 @@ object OtherSettingsGui {
      * Creates a Back button as a Player Head.
      */
     private fun createBackHeadButton(): ItemStack {
-        val textureValue = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNzI0MzE5MTFmNDE3OGI0ZDJiNDEzYWE3ZjVjNzhhZTQ0NDdmZTkyNDY5NDNjMzFkZjMxMTYzYzBlMDQzZTBkNiJ9fX0=" // Replace with actual base64 texture
-
+        val textureValue = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNzI0MzE5MTFmNDE3OGI0ZDJiNDEzYWE3ZjVjNzhhZTQ0NDdmZTkyNDY5NDNjMzFkZjMxMTYzYzBlMDQzZTBkNiJ9fX0="
         return CustomGui.createPlayerHeadButton(
             "BackButton",
             Text.literal("Back").styled { it.withColor(Formatting.WHITE).withBold(false) },
