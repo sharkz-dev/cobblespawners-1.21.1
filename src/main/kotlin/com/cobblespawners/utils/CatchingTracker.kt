@@ -1,6 +1,6 @@
 package com.cobblespawners.utils
 
-import com.blanketutils.utils.logDebug
+import com.everlastingutils.utils.logDebug
 import com.cobblemon.mod.common.api.events.CobblemonEvents
 import com.cobblemon.mod.common.api.events.pokeball.PokeBallCaptureCalculatedEvent
 import com.cobblemon.mod.common.api.pokeball.catching.CaptureContext

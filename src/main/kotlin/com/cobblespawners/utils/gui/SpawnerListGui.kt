@@ -1,9 +1,9 @@
 package com.cobblespawners.utils.gui
 
-import com.blanketutils.command.CommandManager
-import com.blanketutils.gui.CustomGui
-import com.blanketutils.gui.InteractionContext
-import com.blanketutils.gui.setCustomName
+import com.everlastingutils.command.CommandManager
+import com.everlastingutils.gui.CustomGui
+import com.everlastingutils.gui.InteractionContext
+import com.everlastingutils.gui.setCustomName
 import com.cobblespawners.utils.*
 import net.minecraft.item.ItemStack
 import net.minecraft.item.Items

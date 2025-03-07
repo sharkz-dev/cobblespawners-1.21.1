@@ -1,10 +1,10 @@
 // File: SearchGui.kt
 package com.cobblespawners.utils.gui
 
-import com.blanketutils.gui.AnvilGuiManager
-import com.blanketutils.gui.CustomGui
-import com.blanketutils.gui.FullyModularAnvilScreenHandler
-import com.blanketutils.gui.setCustomName
+import com.everlastingutils.gui.AnvilGuiManager
+import com.everlastingutils.gui.CustomGui
+import com.everlastingutils.gui.FullyModularAnvilScreenHandler
+import com.everlastingutils.gui.setCustomName
 import net.minecraft.item.ItemStack
 import net.minecraft.item.Items
 import net.minecraft.server.network.ServerPlayerEntity

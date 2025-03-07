@@ -1,9 +1,9 @@
 package com.cobblespawners.utils
 
-import com.blanketutils.config.ConfigData
-import com.blanketutils.config.ConfigManager
-import com.blanketutils.config.ConfigMetadata
-import com.blanketutils.utils.LogDebug
+import com.everlastingutils.config.ConfigData
+import com.everlastingutils.config.ConfigManager
+import com.everlastingutils.config.ConfigMetadata
+import com.everlastingutils.utils.LogDebug
 import kotlinx.coroutines.runBlocking
 import net.minecraft.util.math.BlockPos
 import org.slf4j.LoggerFactory

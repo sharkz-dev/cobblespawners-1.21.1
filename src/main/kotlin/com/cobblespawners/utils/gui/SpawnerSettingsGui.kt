@@ -1,9 +1,9 @@
 // File: SpawnerSettingsGui.kt
 package com.cobblespawners.utils.gui
 
-import com.blanketutils.gui.CustomGui
-import com.blanketutils.gui.InteractionContext
-import com.blanketutils.gui.setCustomName
+import com.everlastingutils.gui.CustomGui
+import com.everlastingutils.gui.InteractionContext
+import com.everlastingutils.gui.setCustomName
 import com.cobblespawners.CobbleSpawners
 import com.cobblespawners.utils.*
 import net.minecraft.component.DataComponentTypes

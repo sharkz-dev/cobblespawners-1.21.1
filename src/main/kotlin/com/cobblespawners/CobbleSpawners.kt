@@ -1,6 +1,6 @@
 package com.cobblespawners
 
-import com.blanketutils.utils.logDebug
+import com.everlastingutils.utils.logDebug
 import com.cobblespawners.utils.gui.SpawnerPokemonSelectionGui
 import com.cobblemon.mod.common.api.pokemon.PokemonSpecies
 import com.cobblemon.mod.common.api.pokemon.stats.Stats

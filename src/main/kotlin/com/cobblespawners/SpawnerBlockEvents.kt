@@ -1,7 +1,7 @@
 package com.cobblespawners
 
-import com.blanketutils.command.CommandManager
-import com.blanketutils.utils.logDebug
+import com.everlastingutils.command.CommandManager
+import com.everlastingutils.utils.logDebug
 import com.cobblespawners.utils.*
 import com.cobblespawners.api.SpawnerNBTManager
 import com.cobblespawners.utils.gui.SpawnerPokemonSelectionGui

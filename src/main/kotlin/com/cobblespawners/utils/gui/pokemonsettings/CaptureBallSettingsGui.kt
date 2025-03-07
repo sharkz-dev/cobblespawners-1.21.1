@@ -3,9 +3,9 @@ package com.cobblespawners.utils.gui.pokemonsettings
 
 import com.cobblespawners.utils.CobbleSpawnersConfig
 import com.cobblespawners.utils.gui.SpawnerPokemonSelectionGui
-import com.blanketutils.gui.CustomGui
-import com.blanketutils.gui.InteractionContext
-import com.blanketutils.gui.setCustomName
+import com.everlastingutils.gui.CustomGui
+import com.everlastingutils.gui.InteractionContext
+import com.everlastingutils.gui.setCustomName
 import com.cobblemon.mod.common.item.PokeBallItem
 import net.minecraft.component.DataComponentTypes
 import net.minecraft.item.ItemStack

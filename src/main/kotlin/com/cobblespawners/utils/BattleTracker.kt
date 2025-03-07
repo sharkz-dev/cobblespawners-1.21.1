@@ -1,7 +1,7 @@
 // File: BattleTracker.kt
 package com.cobblespawners.utils
 
-import com.blanketutils.utils.logDebug
+import com.everlastingutils.utils.logDebug
 import com.cobblespawners.utils.CobbleSpawnersConfig
 import com.cobblemon.mod.common.api.battles.model.PokemonBattle
 import com.cobblemon.mod.common.api.battles.model.actor.BattleActor

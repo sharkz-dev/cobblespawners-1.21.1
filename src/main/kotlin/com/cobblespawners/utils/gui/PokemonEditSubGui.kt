@@ -1,9 +1,9 @@
 package com.cobblespawners.utils.gui
 
 
-import com.blanketutils.gui.CustomGui
-import com.blanketutils.gui.InteractionContext
-import com.blanketutils.gui.setCustomName
+import com.everlastingutils.gui.CustomGui
+import com.everlastingutils.gui.InteractionContext
+import com.everlastingutils.gui.setCustomName
 import com.cobblespawners.utils.CobbleSpawnersConfig
 import com.cobblespawners.utils.gui.pokemonsettings.*
 import net.minecraft.item.ItemStack
@@ -89,20 +89,37 @@ object PokemonEditSubGui {
         formName: String?,
         additionalAspects: Set<String>
     ) {
-        CustomGui.closeGui(player)
-
         when (context.slotIndex) {
-            Slots.IV_SETTINGS -> IVSettingsGui.openIVEditorGui(player, spawnerPos, pokemonName, formName, additionalAspects)
-            Slots.EV_SETTINGS -> EVSettingsGui.openEVEditorGui(player, spawnerPos, pokemonName, formName, additionalAspects)
-            Slots.SPAWN_SETTINGS -> SpawnSettingsGui.openSpawnShinyEditorGui(player, spawnerPos, pokemonName, formName, additionalAspects)
-            Slots.SIZE_SETTINGS -> SizeSettingsGui.openSizeEditorGui(player, spawnerPos, pokemonName, formName, additionalAspects)
-            Slots.CAPTURE_SETTINGS -> CaptureSettingsGui.openCaptureSettingsGui(player, spawnerPos, pokemonName, formName, additionalAspects)
-            Slots.OTHER_SETTINGS -> OtherSettingsGui.openOtherEditableGui(player, spawnerPos, pokemonName, formName, additionalAspects)
+            Slots.IV_SETTINGS -> {
+                CustomGui.closeGui(player)
+                IVSettingsGui.openIVEditorGui(player, spawnerPos, pokemonName, formName, additionalAspects)
+            }
+            Slots.EV_SETTINGS -> {
+                CustomGui.closeGui(player)
+                EVSettingsGui.openEVEditorGui(player, spawnerPos, pokemonName, formName, additionalAspects)
+            }
+            Slots.SPAWN_SETTINGS -> {
+                CustomGui.closeGui(player)
+                SpawnSettingsGui.openSpawnShinyEditorGui(player, spawnerPos, pokemonName, formName, additionalAspects)
+            }
+            Slots.SIZE_SETTINGS -> {
+                CustomGui.closeGui(player)
+                SizeSettingsGui.openSizeEditorGui(player, spawnerPos, pokemonName, formName, additionalAspects)
+            }
+            Slots.CAPTURE_SETTINGS -> {
+                CustomGui.closeGui(player)
+                CaptureSettingsGui.openCaptureSettingsGui(player, spawnerPos, pokemonName, formName, additionalAspects)
+            }
+            Slots.OTHER_SETTINGS -> {
+                CustomGui.closeGui(player)
+                OtherSettingsGui.openOtherEditableGui(player, spawnerPos, pokemonName, formName, additionalAspects)
+            }
             Slots.BACK -> {
+                CustomGui.closeGui(player)
                 player.sendMessage(Text.literal("Returning to Pokémon List"), false)
                 SpawnerPokemonSelectionGui.openSpawnerGui(player, spawnerPos, SpawnerPokemonSelectionGui.playerPages[player] ?: 0)
             }
-            else -> SpawnerPokemonSelectionGui.openSpawnerGui(player, spawnerPos, SpawnerPokemonSelectionGui.playerPages[player] ?: 0) // Fallback
+            // Do nothing for filler panes - GUI stays open
         }
     }
 

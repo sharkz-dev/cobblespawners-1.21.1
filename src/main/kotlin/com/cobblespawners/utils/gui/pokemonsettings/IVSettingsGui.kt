@@ -2,10 +2,10 @@
 package com.cobblespawners.utils.gui.pokemonsettings
 
 import com.cobblespawners.utils.*
-import com.blanketutils.gui.CustomGui
-import com.blanketutils.gui.InteractionContext
-import com.blanketutils.gui.setCustomName
-import com.blanketutils.utils.logDebug
+import com.everlastingutils.gui.CustomGui
+import com.everlastingutils.gui.InteractionContext
+import com.everlastingutils.gui.setCustomName
+import com.everlastingutils.utils.logDebug
 import com.cobblespawners.utils.gui.PokemonEditSubGui
 import com.cobblespawners.utils.gui.SpawnerPokemonSelectionGui
 import com.cobblespawners.utils.gui.SpawnerPokemonSelectionGui.spawnerGuisOpen

@@ -3,9 +3,9 @@ package com.cobblespawners.utils.gui.pokemonsettings
 import com.cobblespawners.utils.*
 import com.cobblespawners.utils.gui.SpawnerPokemonSelectionGui
 import com.cobblespawners.utils.gui.SpawnerPokemonSelectionGui.spawnerGuisOpen
-import com.blanketutils.gui.CustomGui
-import com.blanketutils.gui.InteractionContext
-import com.blanketutils.gui.setCustomName
+import com.everlastingutils.gui.CustomGui
+import com.everlastingutils.gui.InteractionContext
+import com.everlastingutils.gui.setCustomName
 import com.cobblespawners.utils.gui.PokemonEditSubGui
 import net.minecraft.component.DataComponentTypes
 import net.minecraft.component.type.LoreComponent
@@ -94,14 +94,16 @@ object CaptureSettingsGui {
         when (context.slotIndex) {
             Slots.CATCHABLE_TOGGLE -> {
                 if (context.clickType == ClickType.LEFT) {
-                    toggleIsCatchable(spawnerPos, pokemonName, formName, player)
-                    updateGuiItem(context, player, "Catchable", !selectedEntry.captureSettings.isCatchable, Formatting.GREEN)
+                    // Get the new value directly from the toggle function
+                    val newCatchableValue = toggleIsCatchable(spawnerPos, pokemonName, formName, player)
+                    updateGuiItem(context, player, "Catchable", newCatchableValue, Formatting.GREEN)
                 }
             }
             Slots.RESTRICT_CAPTURE -> {
                 if (context.clickType == ClickType.LEFT) {
-                    toggleRestrictCapture(spawnerPos, pokemonName, formName, player)
-                    updateGuiItem(context, player, "Restrict Capture To Limited Balls", !selectedEntry.captureSettings.restrictCaptureToLimitedBalls, Formatting.RED)
+                    // Get the new value directly from the toggle function
+                    val newRestrictValue = toggleRestrictCapture(spawnerPos, pokemonName, formName, player)
+                    updateGuiItem(context, player, "Restrict Capture To Limited Balls", newRestrictValue, Formatting.RED)
                 } else if (context.clickType == ClickType.RIGHT) {
                     CaptureBallSettingsGui.openCaptureBallSettingsGui(player, spawnerPos, pokemonName, formName, additionalAspects)
                 }
@@ -212,33 +214,43 @@ object CaptureSettingsGui {
     }
 
     /**
-     * Toggles whether the Pokémon is catchable
+     * Toggles whether the Pokémon is catchable and returns the new value
      */
     private fun toggleIsCatchable(
         spawnerPos: BlockPos,
         pokemonName: String,
         formName: String?,
         player: ServerPlayerEntity
-    ) {
+    ): Boolean {
+        var newValue = false
+
         CobbleSpawnersConfig.updatePokemonSpawnEntry(spawnerPos, pokemonName, formName) { entry ->
             entry.captureSettings.isCatchable = !entry.captureSettings.isCatchable
+            newValue = entry.captureSettings.isCatchable
         }
+
         player.sendMessage(Text.literal("Toggled catchable state for $pokemonName."), false)
+        return newValue
     }
 
     /**
-     * Toggles whether capture is restricted to specific balls
+     * Toggles whether capture is restricted to specific balls and returns the new value
      */
     private fun toggleRestrictCapture(
         spawnerPos: BlockPos,
         pokemonName: String,
         formName: String?,
         player: ServerPlayerEntity
-    ) {
+    ): Boolean {
+        var newValue = false
+
         CobbleSpawnersConfig.updatePokemonSpawnEntry(spawnerPos, pokemonName, formName) { entry ->
             entry.captureSettings.restrictCaptureToLimitedBalls = !entry.captureSettings.restrictCaptureToLimitedBalls
+            newValue = entry.captureSettings.restrictCaptureToLimitedBalls
         }
+
         player.sendMessage(Text.literal("Toggled restricted capture for $pokemonName."), false)
+        return newValue
     }
 
     /**

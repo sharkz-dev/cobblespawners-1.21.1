@@ -1,7 +1,7 @@
 package com.cobblespawners.utils
 
-import com.blanketutils.command.CommandManager
-import com.blanketutils.gui.setCustomName
+import com.everlastingutils.command.CommandManager
+import com.everlastingutils.gui.setCustomName
 import com.cobblemon.mod.common.api.pokedex.entry.DexEntries
 import com.cobblemon.mod.common.api.pokemon.PokemonProperties
 import com.cobblespawners.CobbleSpawners
