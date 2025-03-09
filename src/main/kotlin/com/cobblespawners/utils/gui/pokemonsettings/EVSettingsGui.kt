@@ -139,14 +139,14 @@ object EVSettingsGui {
                 else -> 0
             }
             if (delta != 0) {
-                updateEVValue(spawnerPos, pokemonName, formName, button, delta, player)
+                updateEVValue(spawnerPos, pokemonName, formName, button, delta, player, additionalAspects)
             }
             return
         }
 
         // Handle toggle button
         if (slotIndex == TOGGLE_CUSTOM_EVS_SLOT) {
-            toggleAllowCustomEvs(spawnerPos, pokemonName, formName, player)
+            toggleAllowCustomEvs(spawnerPos, pokemonName, formName, player, additionalAspects)
             return
         }
 
@@ -261,9 +261,15 @@ object EVSettingsGui {
         formName: String?,
         button: StatButton,
         delta: Int,
-        player: ServerPlayerEntity
+        player: ServerPlayerEntity,
+        additionalAspects: Set<String>
     ) {
-        CobbleSpawnersConfig.updatePokemonSpawnEntry(spawnerPos, pokemonName, formName) { entry ->
+        CobbleSpawnersConfig.updatePokemonSpawnEntry(
+            spawnerPos,
+            pokemonName,
+            formName,
+            additionalAspects
+        ) { entry ->
             val evs = entry.evSettings
             val currentValue = button.getter(evs)
             button.setter(evs, currentValue + delta)
@@ -273,12 +279,13 @@ object EVSettingsGui {
         }
 
         // Refresh just the modified button
-        CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName)?.let { entry ->
+        CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName ?: "Standard", additionalAspects)?.let { entry ->
             val updatedButton = createEVStatButton(button, entry.evSettings)
             updateSingleItem(player, button.slot, updatedButton)
 
             logDebug(
-                "Updated EV ${button.name} for ${entry.pokemonName} (${entry.formName ?: "Standard"}) at spawner $spawnerPos.",
+                "Updated EV ${button.name} for ${entry.pokemonName} (${entry.formName ?: "Standard"}) " +
+                        "with aspects ${additionalAspects.joinToString(", ")} at spawner $spawnerPos.",
                 "cobblespawners"
             )
         }
@@ -291,9 +298,15 @@ object EVSettingsGui {
         spawnerPos: BlockPos,
         pokemonName: String,
         formName: String?,
-        player: ServerPlayerEntity
+        player: ServerPlayerEntity,
+        additionalAspects: Set<String>
     ) {
-        CobbleSpawnersConfig.updatePokemonSpawnEntry(spawnerPos, pokemonName, formName) { entry ->
+        CobbleSpawnersConfig.updatePokemonSpawnEntry(
+            spawnerPos,
+            pokemonName,
+            formName,
+            additionalAspects
+        ) { entry ->
             entry.evSettings.allowCustomEvsOnDefeat = !entry.evSettings.allowCustomEvsOnDefeat
         } ?: run {
             player.sendMessage(Text.literal("Failed to toggle allowCustomEvsOnDefeat."), false)
@@ -301,12 +314,13 @@ object EVSettingsGui {
         }
 
         // Update just the toggle button
-        CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName)?.let { entry ->
+        CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName ?: "Standard", additionalAspects)?.let { entry ->
             val toggleButton = createToggleCustomEvsButton(entry.evSettings.allowCustomEvsOnDefeat)
             updateSingleItem(player, TOGGLE_CUSTOM_EVS_SLOT, toggleButton)
 
             logDebug(
-                "Toggled allowCustomEvsOnDefeat for ${entry.pokemonName} (${entry.formName ?: "Standard"}) at spawner $spawnerPos.",
+                "Toggled allowCustomEvsOnDefeat for ${entry.pokemonName} (${entry.formName ?: "Standard"}) " +
+                        "with aspects ${additionalAspects.joinToString(", ")} at spawner $spawnerPos.",
                 "cobblespawners"
             )
         }

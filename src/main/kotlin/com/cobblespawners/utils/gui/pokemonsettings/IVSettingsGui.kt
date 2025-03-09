@@ -185,14 +185,14 @@ object IVSettingsGui {
                 else -> 0
             }
             if (delta != 0) {
-                updateIVValue(spawnerPos, pokemonName, formName, button, delta, player)
+                updateIVValue(spawnerPos, pokemonName, formName, button, delta, player, additionalAspects)
             }
             return
         }
 
         // Handle toggle button
         if (slotIndex == TOGGLE_CUSTOM_IVS_SLOT) {
-            toggleAllowCustomIvs(spawnerPos, pokemonName, formName, player)
+            toggleAllowCustomIvs(spawnerPos, pokemonName, formName, player, additionalAspects)
             return
         }
 
@@ -307,9 +307,16 @@ object IVSettingsGui {
         formName: String?,
         button: StatButton,
         delta: Int,
-        player: ServerPlayerEntity
+        player: ServerPlayerEntity,
+        additionalAspects: Set<String> // Add this parameter
     ) {
-        CobbleSpawnersConfig.updatePokemonSpawnEntry(spawnerPos, pokemonName, formName) { entry ->
+        // Pass additionalAspects to updatePokemonSpawnEntry
+        CobbleSpawnersConfig.updatePokemonSpawnEntry(
+            spawnerPos,
+            pokemonName,
+            formName, // formName is already a String? so this should be fine
+            additionalAspects  // Add this parameter
+        ) { entry ->
             val iv = entry.ivSettings
             val currentValue = button.getter(iv)
             button.setter(iv, currentValue + delta)
@@ -318,13 +325,14 @@ object IVSettingsGui {
             return
         }
 
-        // Refresh just the modified button
-        CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName)?.let { entry ->
+        // Include additionalAspects when retrieving the updated entry
+        CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName ?: "Standard", additionalAspects)?.let { entry ->
             val updatedButton = createIVStatButton(button, entry.ivSettings)
             updateSingleItem(player, button.slot, updatedButton)
 
             logDebug(
-                "Updated IV ${button.name} for ${entry.pokemonName} (${entry.formName ?: "Standard"}) at spawner $spawnerPos.",
+                "Updated IV ${button.name} for ${entry.pokemonName} (${entry.formName ?: "Standard"}) " +
+                        "with aspects ${additionalAspects.joinToString(", ")} at spawner $spawnerPos.",
                 "cobblespawners"
             )
         }
@@ -337,26 +345,35 @@ object IVSettingsGui {
         spawnerPos: BlockPos,
         pokemonName: String,
         formName: String?,
-        player: ServerPlayerEntity
+        player: ServerPlayerEntity,
+        additionalAspects: Set<String> // Add this parameter
     ) {
-        CobbleSpawnersConfig.updatePokemonSpawnEntry(spawnerPos, pokemonName, formName) { entry ->
+        // Pass additionalAspects to updatePokemonSpawnEntry
+        CobbleSpawnersConfig.updatePokemonSpawnEntry(
+            spawnerPos,
+            pokemonName,
+            formName,
+            additionalAspects  // Add this parameter
+        ) { entry ->
             entry.ivSettings.allowCustomIvs = !entry.ivSettings.allowCustomIvs
         } ?: run {
             player.sendMessage(Text.literal("Failed to toggle allowCustomIvs."), false)
             return
         }
 
-        // Update just the toggle button
-        CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName)?.let { entry ->
+        // Include additionalAspects when retrieving the updated entry
+        CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName ?: "Standard", additionalAspects)?.let { entry ->
             val toggleButton = createToggleCustomIvsButton(entry.ivSettings.allowCustomIvs)
             updateSingleItem(player, TOGGLE_CUSTOM_IVS_SLOT, toggleButton)
 
             logDebug(
-                "Toggled allowCustomIvs for ${entry.pokemonName} (${entry.formName ?: "Standard"}) at spawner $spawnerPos.",
+                "Toggled allowCustomIvs for ${entry.pokemonName} (${entry.formName ?: "Standard"}) " +
+                        "with aspects ${additionalAspects.joinToString(", ")} at spawner $spawnerPos.",
                 "cobblespawners"
             )
         }
     }
+
 
     /**
      * Updates a single slot in the GUI

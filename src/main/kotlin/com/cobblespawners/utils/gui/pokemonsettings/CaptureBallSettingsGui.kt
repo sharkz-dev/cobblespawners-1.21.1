@@ -104,10 +104,10 @@ object CaptureBallSettingsGui {
         val endIndex = minOf(startIndex + ITEMS_PER_PAGE, availablePokeballs.size)
 
         when (context.slotIndex) {
-            Slots.PREV_PAGE -> handlePreviousPage(player, spawnerPos, pokemonName, formName, currentPage)
+            Slots.PREV_PAGE -> handlePreviousPage(player, spawnerPos, pokemonName, formName, additionalAspects, currentPage)
             Slots.BACK_BUTTON -> handleBackButton(player, spawnerPos, pokemonName, formName, additionalAspects)
-            Slots.NEXT_PAGE -> handleNextPage(player, spawnerPos, pokemonName, formName, currentPage, availablePokeballs, endIndex)
-            else -> handlePokeballSelection(context, player, spawnerPos, pokemonName, formName)
+            Slots.NEXT_PAGE -> handleNextPage(player, spawnerPos, pokemonName, formName, additionalAspects, currentPage, availablePokeballs, endIndex)
+            else -> handlePokeballSelection(context, player, spawnerPos, pokemonName, formName, additionalAspects)
         }
     }
 
@@ -119,11 +119,12 @@ object CaptureBallSettingsGui {
         spawnerPos: BlockPos,
         pokemonName: String,
         formName: String?,
+        additionalAspects: Set<String>,
         currentPage: Int
     ) {
         if (currentPage > 0) {
             playerPages[player] = currentPage - 1
-            refreshGuiItems(player, spawnerPos, pokemonName, formName)
+            refreshGuiItems(player, spawnerPos, pokemonName, formName, additionalAspects)
         }
     }
 
@@ -135,13 +136,14 @@ object CaptureBallSettingsGui {
         spawnerPos: BlockPos,
         pokemonName: String,
         formName: String?,
+        additionalAspects: Set<String>,
         currentPage: Int,
         availablePokeballs: List<ItemStack>,
         endIndex: Int
     ) {
         if (endIndex < availablePokeballs.size) {
             playerPages[player] = currentPage + 1
-            refreshGuiItems(player, spawnerPos, pokemonName, formName)
+            refreshGuiItems(player, spawnerPos, pokemonName, formName, additionalAspects)
         }
     }
 
@@ -167,12 +169,18 @@ object CaptureBallSettingsGui {
         player: ServerPlayerEntity,
         spawnerPos: BlockPos,
         pokemonName: String,
-        formName: String?
+        formName: String?,
+        additionalAspects: Set<String>
     ) {
         val clickedBall = context.clickedStack.item as? PokeBallItem ?: return
         val ballName = clickedBall.translationKey.split(".").last()
 
-        val selectedEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName)
+        val selectedEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(
+            spawnerPos,
+            pokemonName,
+            formName ?: "Standard",
+            additionalAspects
+        )
         val requiredPokeBalls = selectedEntry?.captureSettings?.requiredPokeBalls ?: listOf()
 
         // Toggle selection state
@@ -184,8 +192,13 @@ object CaptureBallSettingsGui {
             requiredPokeBalls.plus(ballName)
         }
 
-        // Update the config
-        CobbleSpawnersConfig.updatePokemonSpawnEntry(spawnerPos, pokemonName, formName) { entry ->
+        // Update the config - passing additionalAspects
+        CobbleSpawnersConfig.updatePokemonSpawnEntry(
+            spawnerPos,
+            pokemonName,
+            formName,
+            additionalAspects
+        ) { entry ->
             entry.captureSettings.requiredPokeBalls = newPokeBalls
         }
 
@@ -255,9 +268,15 @@ object CaptureBallSettingsGui {
         player: ServerPlayerEntity,
         spawnerPos: BlockPos,
         pokemonName: String,
-        formName: String?
+        formName: String?,
+        additionalAspects: Set<String>
     ) {
-        val selectedEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName)
+        val selectedEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(
+            spawnerPos,
+            pokemonName,
+            formName ?: "Standard",
+            additionalAspects
+        )
         val requiredPokeBalls = selectedEntry?.captureSettings?.requiredPokeBalls ?: listOf()
         val availablePokeballs = getAvailablePokeballs()
         val currentPage = playerPages[player] ?: 0

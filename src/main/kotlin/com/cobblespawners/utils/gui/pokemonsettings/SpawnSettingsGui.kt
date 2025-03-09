@@ -136,7 +136,7 @@ object SpawnSettingsGui {
                 else -> 0.0
             }
             if (delta != 0.0) {
-                updateSpawnChance(spawnerPos, pokemonName, formName, delta, player)
+                updateSpawnChance(spawnerPos, pokemonName, formName, additionalAspects, delta, player)
             }
             return
         }
@@ -149,14 +149,14 @@ object SpawnSettingsGui {
                 else -> 0
             }
             if (delta != 0) {
-                adjustLevel(spawnerPos, pokemonName, formName, player, button.isMinLevel, delta)
+                adjustLevel(spawnerPos, pokemonName, formName, additionalAspects, player, button.isMinLevel, delta)
             }
             return
         }
 
         // Handle Spawn Chance Type Toggle Button
         if (slotIndex == DisplaySlots.SPAWN_CHANCE_TYPE) {
-            toggleSpawnChanceType(spawnerPos, pokemonName, formName, player)
+            toggleSpawnChanceType(spawnerPos, pokemonName, formName, additionalAspects, player)
             return
         }
 
@@ -321,22 +321,28 @@ object SpawnSettingsGui {
         spawnerPos: BlockPos,
         pokemonName: String,
         formName: String?,
+        additionalAspects: Set<String>,
         delta: Double,
         player: ServerPlayerEntity
     ) {
-        CobbleSpawnersConfig.updatePokemonSpawnEntry(spawnerPos, pokemonName, formName) { entry ->
+        CobbleSpawnersConfig.updatePokemonSpawnEntry(
+            spawnerPos,
+            pokemonName,
+            formName,
+            additionalAspects
+        ) { entry ->
             entry.spawnChance = (entry.spawnChance + delta).coerceIn(0.0, 100.0)
         } ?: run {
             player.sendMessage(Text.literal("Failed to update spawn chance."), false)
             return
         }
 
-        CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName)?.let { updatedEntry ->
+        CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName ?: "Standard", additionalAspects)?.let { updatedEntry ->
             updateSingleItem(player, DisplaySlots.SPAWN_CHANCE, createCurrentValueHead("Current Spawn Chance", "Spawn Chance", updatedEntry.spawnChance, "%"))
             chanceButtonMap.forEach { (slot, button) ->
                 updateSingleItem(player, slot, createChanceButtonHead(button, updatedEntry))
             }
-            logDebug("Updated spawnChance to ${updatedEntry.spawnChance}% for $pokemonName (${formName ?: "Standard"}) at spawner $spawnerPos.", "cobblespawners")
+            logDebug("Updated spawnChance to ${updatedEntry.spawnChance}% for $pokemonName (${formName ?: "Standard"}) with aspects ${additionalAspects.joinToString(", ")} at spawner $spawnerPos.", "cobblespawners")
             player.sendMessage(Text.literal("Spawn Chance set to ${"%.2f".format(updatedEntry.spawnChance)}% for $pokemonName."), false)
         }
     }
@@ -348,9 +354,15 @@ object SpawnSettingsGui {
         spawnerPos: BlockPos,
         pokemonName: String,
         formName: String?,
+        additionalAspects: Set<String>,
         player: ServerPlayerEntity
     ) {
-        CobbleSpawnersConfig.updatePokemonSpawnEntry(spawnerPos, pokemonName, formName) { entry ->
+        CobbleSpawnersConfig.updatePokemonSpawnEntry(
+            spawnerPos,
+            pokemonName,
+            formName,
+            additionalAspects
+        ) { entry ->
             entry.spawnChanceType = when (entry.spawnChanceType) {
                 SpawnChanceType.COMPETITIVE -> SpawnChanceType.INDEPENDENT
                 SpawnChanceType.INDEPENDENT -> SpawnChanceType.COMPETITIVE
@@ -360,9 +372,9 @@ object SpawnSettingsGui {
             return
         }
 
-        CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName)?.let { updatedEntry ->
+        CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName ?: "Standard", additionalAspects)?.let { updatedEntry ->
             updateSingleItem(player, DisplaySlots.SPAWN_CHANCE_TYPE, createToggleSpawnChanceTypeHead(updatedEntry))
-            logDebug("Toggled spawnChanceType to ${updatedEntry.spawnChanceType} for $pokemonName (${formName ?: "Standard"}) at spawner $spawnerPos.", "cobblespawners")
+            logDebug("Toggled spawnChanceType to ${updatedEntry.spawnChanceType} for $pokemonName (${formName ?: "Standard"}) with aspects ${additionalAspects.joinToString(", ")} at spawner $spawnerPos.", "cobblespawners")
             player.sendMessage(Text.literal("Spawn Chance Type set to ${updatedEntry.spawnChanceType} for $pokemonName."), false)
         }
     }
@@ -374,11 +386,17 @@ object SpawnSettingsGui {
         spawnerPos: BlockPos,
         pokemonName: String,
         formName: String?,
+        additionalAspects: Set<String>,
         player: ServerPlayerEntity,
         isMinLevel: Boolean,
         delta: Int
     ) {
-        CobbleSpawnersConfig.updatePokemonSpawnEntry(spawnerPos, pokemonName, formName) { entry ->
+        CobbleSpawnersConfig.updatePokemonSpawnEntry(
+            spawnerPos,
+            pokemonName,
+            formName,
+            additionalAspects
+        ) { entry ->
             if (isMinLevel) {
                 val newMin = (entry.minLevel + delta).coerceAtLeast(1).coerceAtMost(entry.maxLevel)
                 entry.minLevel = newMin
@@ -391,7 +409,7 @@ object SpawnSettingsGui {
             return
         }
 
-        CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName)?.let { updatedEntry ->
+        CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName ?: "Standard", additionalAspects)?.let { updatedEntry ->
             val displaySlot = if (isMinLevel) DisplaySlots.MIN_LEVEL else DisplaySlots.MAX_LEVEL
             val displayValue = if (isMinLevel) updatedEntry.minLevel.toDouble() else updatedEntry.maxLevel.toDouble()
             val displayType = if (isMinLevel) "Min Level" else "Max Level"
@@ -399,7 +417,11 @@ object SpawnSettingsGui {
             levelButtonMap.filter { it.value.isMinLevel == isMinLevel }.forEach { (slot, button) ->
                 updateSingleItem(player, slot, createLevelAdjustmentHead(button, updatedEntry))
             }
-            logger.info("Adjusted ${if (isMinLevel) "min" else "max"} level for $pokemonName (${updatedEntry.formName ?: "Standard"}) at spawner $spawnerPos to ${if (isMinLevel) updatedEntry.minLevel else updatedEntry.maxLevel}.")
+            logger.info(
+                "Adjusted ${if (isMinLevel) "min" else "max"} level for $pokemonName (${updatedEntry.formName ?: "Standard"}) " +
+                        "with aspects ${additionalAspects.joinToString(", ")} at spawner $spawnerPos to " +
+                        "${if (isMinLevel) updatedEntry.minLevel else updatedEntry.maxLevel}."
+            )
             player.sendMessage(Text.literal("Set ${if (isMinLevel) "Min" else "Max"} Level to ${if (isMinLevel) updatedEntry.minLevel else updatedEntry.maxLevel} for $pokemonName."), false)
         }
     }

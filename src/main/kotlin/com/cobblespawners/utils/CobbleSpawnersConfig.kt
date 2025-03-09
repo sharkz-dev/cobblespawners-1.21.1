@@ -114,7 +114,7 @@ data class SpawnerData(
 )
 
 data class CobbleSpawnersConfigData(
-    override val version: String = "2.0.2",
+    override val version: String = "2.0.3",
     override val configId: String = "cobblespawners",
 
     var globalConfig: GlobalConfig = GlobalConfig(),
@@ -123,7 +123,7 @@ data class CobbleSpawnersConfigData(
 
 object CobbleSpawnersConfig {
     private val logger = LoggerFactory.getLogger("CobbleSpawnersConfig")
-    private const val CURRENT_VERSION = "2.0.2"
+    private const val CURRENT_VERSION = "2.0.3"
     private const val MOD_ID = "cobblespawners" // Added mod ID for debug
 
     private lateinit var configManager: ConfigManager<CobbleSpawnersConfigData>
@@ -258,12 +258,14 @@ object CobbleSpawnersConfig {
         spawnerPos: BlockPos,
         pokemonName: String,
         formName: String?,
+        additionalAspects: Set<String> = emptySet(),
         update: (PokemonSpawnEntry) -> Unit
     ): PokemonSpawnEntry? {
         val spawnerData = spawners[spawnerPos] ?: return null
         val selectedEntry = spawnerData.selectedPokemon.find {
             it.pokemonName.equals(pokemonName, ignoreCase = true) &&
-                    (it.formName.equals(formName, ignoreCase = true) || (it.formName == null && formName == null))
+                    (it.formName?.equals(formName, ignoreCase = true) ?: (formName == null)) &&
+                    it.aspects.map { a -> a.lowercase() }.toSet() == additionalAspects.map { a -> a.lowercase() }.toSet()
         } ?: return null
 
         update(selectedEntry)
@@ -273,15 +275,6 @@ object CobbleSpawnersConfig {
         return selectedEntry
     }
 
-    fun getPokemonSpawnEntry(spawnerPos: BlockPos, pokemonName: String, formName: String?): PokemonSpawnEntry? {
-        val spawnerData = spawners[spawnerPos] ?: return null
-        return spawnerData.selectedPokemon.find {
-            it.pokemonName.equals(pokemonName, ignoreCase = true) &&
-                    (it.formName.equals(formName, ignoreCase = true) || (it.formName == null && formName == null))
-        }
-    }
-
-    // Overloaded version to check for aspects
     fun getPokemonSpawnEntry(
         spawnerPos: BlockPos,
         pokemonName: String,

@@ -265,7 +265,12 @@ object SizeSettingsGui {
         player: ServerPlayerEntity,
         additionalAspects: Set<String> = emptySet()
     ) {
-        CobbleSpawnersConfig.updatePokemonSpawnEntry(spawnerPos, pokemonName, formName) { entry ->
+        CobbleSpawnersConfig.updatePokemonSpawnEntry(
+            spawnerPos,
+            pokemonName,
+            formName,
+            additionalAspects
+        ) { entry ->
             entry.sizeSettings.allowCustomSize = !entry.sizeSettings.allowCustomSize
         } ?: run {
             player.sendMessage(Text.literal("Failed to toggle custom size setting."), false)
@@ -285,7 +290,7 @@ object SizeSettingsGui {
             )
 
             logDebug(
-                "Toggled allowCustomSize to $status for ${entry.pokemonName} (${entry.formName ?: "Standard"}) at spawner $spawnerPos.",
+                "Toggled allowCustomSize to $status for ${entry.pokemonName} (${entry.formName ?: "Standard"}) with aspects ${additionalAspects.joinToString(", ")} at spawner $spawnerPos.",
                 "cobblespawners"
             )
         }
@@ -303,7 +308,12 @@ object SizeSettingsGui {
         increase: Boolean,
         additionalAspects: Set<String> = emptySet()
     ) {
-        CobbleSpawnersConfig.updatePokemonSpawnEntry(spawnerPos, pokemonName, formName) { entry ->
+        CobbleSpawnersConfig.updatePokemonSpawnEntry(
+            spawnerPos,
+            pokemonName,
+            formName,
+            additionalAspects
+        ) { entry ->
             val currentSize = if (isMinSize) entry.sizeSettings.minSize else entry.sizeSettings.maxSize
             val newSize = if (increase) currentSize + SIZE_ADJUSTMENT_VALUE else currentSize - SIZE_ADJUSTMENT_VALUE
 
@@ -344,7 +354,8 @@ object SizeSettingsGui {
 
             // Log the adjustment
             logger.info(
-                "Adjusted ${if (isMinSize) "min" else "max"} size for ${entry.pokemonName} (${entry.formName ?: "Standard"}) at spawner $spawnerPos to $currentSize."
+                "Adjusted ${if (isMinSize) "min" else "max"} size for ${entry.pokemonName} (${entry.formName ?: "Standard"}) " +
+                        "with aspects ${additionalAspects.joinToString(", ")} at spawner $spawnerPos to $currentSize."
             )
 
             // Notify the player

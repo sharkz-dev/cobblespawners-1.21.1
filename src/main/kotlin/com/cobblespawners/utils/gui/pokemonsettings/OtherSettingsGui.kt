@@ -29,7 +29,7 @@ object OtherSettingsGui {
         formName: String?,
         additionalAspects: Set<String>
     ) {
-        val selectedEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName)
+        val selectedEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName ?: "Standard", additionalAspects)
         if (selectedEntry == null) {
             player.sendMessage(
                 Text.literal("Pokémon '$pokemonName' with form '${formName ?: "Standard"}' not found in spawner."),
@@ -56,6 +56,7 @@ object OtherSettingsGui {
                         spawnerPos,
                         pokemonName,
                         formName,
+                        additionalAspects,
                         player,
                         context.slotIndex
                     )
@@ -66,6 +67,7 @@ object OtherSettingsGui {
                         spawnerPos,
                         pokemonName,
                         formName,
+                        additionalAspects,
                         player,
                         context.slotIndex
                     )
@@ -76,6 +78,7 @@ object OtherSettingsGui {
                         spawnerPos,
                         pokemonName,
                         formName,
+                        additionalAspects,
                         player,
                         context.slotIndex
                     )
@@ -107,9 +110,16 @@ object OtherSettingsGui {
             )
         }
 
+        // Build the title including the aspects
+        val aspectsDisplay = if (additionalAspects.isNotEmpty()) additionalAspects.joinToString(", ") else ""
+        val guiTitle = if (aspectsDisplay.isNotEmpty())
+            "Edit Other Properties for $pokemonName (${selectedEntry.formName ?: "Standard"}, $aspectsDisplay)"
+        else
+            "Edit Other Properties for $pokemonName (${selectedEntry.formName ?: "Standard"})"
+
         CustomGui.openGui(
             player,
-            "Edit Other Properties for $pokemonName (${selectedEntry.formName ?: "Standard"})",
+            guiTitle,
             layout,
             onInteract,
             onClose
@@ -227,10 +237,16 @@ object OtherSettingsGui {
         spawnerPos: BlockPos,
         pokemonName: String,
         formName: String?,
+        additionalAspects: Set<String>,
         player: ServerPlayerEntity,
         locationSlot: Int
     ) {
-        CobbleSpawnersConfig.updatePokemonSpawnEntry(spawnerPos, pokemonName, formName) { selectedEntry ->
+        CobbleSpawnersConfig.updatePokemonSpawnEntry(
+            spawnerPos,
+            pokemonName,
+            formName,
+            additionalAspects
+        ) { selectedEntry ->
             selectedEntry.spawnSettings.spawnLocation = when (selectedEntry.spawnSettings.spawnLocation) {
                 "SURFACE" -> "UNDERGROUND"
                 "UNDERGROUND" -> "WATER"
@@ -243,7 +259,7 @@ object OtherSettingsGui {
         }
 
         // Update the location head to reflect the new spawn location
-        val updatedEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName)
+        val updatedEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName ?: "Standard", additionalAspects)
         if (updatedEntry != null) {
             val locationHead = createSpawnLocationHeadButton(updatedEntry.spawnSettings.spawnLocation)
 
@@ -256,7 +272,7 @@ object OtherSettingsGui {
             screenHandler.sendContentUpdates()
 
             logger.info(
-                "Toggled spawn location for $pokemonName (${updatedEntry.formName ?: "Standard"}) at spawner $spawnerPos to ${updatedEntry.spawnSettings.spawnLocation}."
+                "Toggled spawn location for $pokemonName (${updatedEntry.formName ?: "Standard"}) with aspects ${additionalAspects.joinToString(", ")} at spawner $spawnerPos to ${updatedEntry.spawnSettings.spawnLocation}."
             )
 
             // Notify the player
@@ -274,10 +290,16 @@ object OtherSettingsGui {
         spawnerPos: BlockPos,
         pokemonName: String,
         formName: String?,
+        additionalAspects: Set<String>,
         player: ServerPlayerEntity,
         clockSlot: Int
     ) {
-        CobbleSpawnersConfig.updatePokemonSpawnEntry(spawnerPos, pokemonName, formName) { selectedEntry ->
+        CobbleSpawnersConfig.updatePokemonSpawnEntry(
+            spawnerPos,
+            pokemonName,
+            formName,
+            additionalAspects
+        ) { selectedEntry ->
             selectedEntry.spawnSettings.spawnTime = when (selectedEntry.spawnSettings.spawnTime) {
                 "DAY" -> "NIGHT"
                 "NIGHT" -> "ALL"
@@ -289,7 +311,7 @@ object OtherSettingsGui {
         }
 
         // Update the spawn time head to reflect the new spawn time
-        val updatedEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName)
+        val updatedEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName ?: "Standard", additionalAspects)
         if (updatedEntry != null) {
             val spawnTimeHead = createSpawnTimeHeadButton(updatedEntry.spawnSettings.spawnTime)
 
@@ -302,7 +324,7 @@ object OtherSettingsGui {
             screenHandler.sendContentUpdates()
 
             logger.info(
-                "Toggled spawn time for $pokemonName (${updatedEntry.formName ?: "Standard"}) at spawner $spawnerPos to ${updatedEntry.spawnSettings.spawnTime}."
+                "Toggled spawn time for $pokemonName (${updatedEntry.formName ?: "Standard"}) with aspects ${additionalAspects.joinToString(", ")} at spawner $spawnerPos to ${updatedEntry.spawnSettings.spawnTime}."
             )
 
             // Notify the player
@@ -320,10 +342,16 @@ object OtherSettingsGui {
         spawnerPos: BlockPos,
         pokemonName: String,
         formName: String?,
+        additionalAspects: Set<String>,
         player: ServerPlayerEntity,
         weatherSlot: Int
     ) {
-        CobbleSpawnersConfig.updatePokemonSpawnEntry(spawnerPos, pokemonName, formName) { selectedEntry ->
+        CobbleSpawnersConfig.updatePokemonSpawnEntry(
+            spawnerPos,
+            pokemonName,
+            formName,
+            additionalAspects
+        ) { selectedEntry ->
             selectedEntry.spawnSettings.spawnWeather = when (selectedEntry.spawnSettings.spawnWeather) {
                 "CLEAR" -> "RAIN"
                 "RAIN" -> "THUNDER"
@@ -336,7 +364,7 @@ object OtherSettingsGui {
         }
 
         // Update the spawn weather head to reflect the new spawn weather
-        val updatedEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName)
+        val updatedEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName ?: "Standard", additionalAspects)
         if (updatedEntry != null) {
             val spawnWeatherHead = createSpawnWeatherHeadButton(updatedEntry.spawnSettings.spawnWeather)
 
@@ -349,7 +377,7 @@ object OtherSettingsGui {
             screenHandler.sendContentUpdates()
 
             logger.info(
-                "Toggled spawn weather for $pokemonName (${updatedEntry.formName ?: "Standard"}) at spawner $spawnerPos to ${updatedEntry.spawnSettings.spawnWeather}."
+                "Toggled spawn weather for $pokemonName (${updatedEntry.formName ?: "Standard"}) with aspects ${additionalAspects.joinToString(", ")} at spawner $spawnerPos to ${updatedEntry.spawnSettings.spawnWeather}."
             )
 
             // Notify the player
