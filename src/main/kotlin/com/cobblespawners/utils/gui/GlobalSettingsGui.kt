@@ -14,13 +14,25 @@ import net.minecraft.item.Items
 import net.minecraft.server.network.ServerPlayerEntity
 import net.minecraft.text.Text
 import net.minecraft.util.Formatting
+import net.minecraft.util.math.BlockPos
 import org.slf4j.LoggerFactory
+import java.util.concurrent.ConcurrentHashMap
 
 object GlobalSettingsGui {
 
     private val logger = LoggerFactory.getLogger("GlobalSettingsGui")
 
-    fun openGlobalSettingsGui(player: ServerPlayerEntity) {
+    // Add this to GlobalSettingsGui.kt, at the top of the object
+    private val playerSpawnerMap = ConcurrentHashMap<ServerPlayerEntity, BlockPos>()
+
+    // Modify the openGlobalSettingsGui function to accept and store the spawner position
+    fun openGlobalSettingsGui(player: ServerPlayerEntity, spawnerPos: BlockPos? = null) {
+        // Store the spawner position if provided
+        if (spawnerPos != null) {
+            playerSpawnerMap[player] = spawnerPos
+            logger.info("Stored spawner position $spawnerPos for player ${player.name.string}")
+        }
+
         // Access globalConfig from CobbleSpawnersConfig
         val globalConfig = CobbleSpawnersConfig.config.globalConfig
         val layout = generateGlobalSettingsLayout(globalConfig)
@@ -57,9 +69,18 @@ object GlobalSettingsGui {
                         player.sendMessage(Text.literal("Show Form in GUI is now ${if (globalConfig.showFormsInGui) "ON" else "OFF"}"), false)
                     }
                     49 -> {
-                        logger.info("Back button clicked. Saving config and returning to Spawner List GUI.")
+                        logger.info("Back button clicked. Saving config and returning to Pokémon Selection GUI.")
                         CobbleSpawnersConfig.saveConfigBlocking()
-                        SpawnerListGui.openSpawnerListGui(player)
+
+                        // Get the stored spawner position
+                        val spawnerPos = playerSpawnerMap.remove(player)
+                        if (spawnerPos != null) {
+                            // Return to the Pokémon Selection GUI
+                            SpawnerPokemonSelectionGui.openSpawnerGui(player, spawnerPos)
+                        } else {
+                            logger.warn("Could not find active spawner GUI for player ${player.name.string}")
+                            player.sendMessage(Text.literal("Could not return to previous screen. Please try again."), false)
+                        }
                     }
                     else -> {
                         logger.warn("Unknown setting clicked at slot ${context.slotIndex}")
@@ -73,6 +94,8 @@ object GlobalSettingsGui {
         }
 
         val onClose: (Inventory) -> Unit = {
+            // Clean up the stored spawner position when the GUI is closed
+            playerSpawnerMap.remove(player)
             logger.info("Global settings GUI closed by player ${player.name.string}.")
             player.sendMessage(Text.literal("Global settings closed."), false)
         }
@@ -85,6 +108,7 @@ object GlobalSettingsGui {
             onClose
         )
     }
+
 
     private fun generateGlobalSettingsLayout(globalConfig: GlobalConfig): List<ItemStack> {
         val layout = MutableList(54) { ItemStack.EMPTY }

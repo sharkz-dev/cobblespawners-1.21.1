@@ -18,6 +18,7 @@ import net.minecraft.util.ActionResult
 import net.minecraft.util.Hand
 import net.minecraft.util.hit.BlockHitResult
 import net.minecraft.util.math.BlockPos
+import net.minecraft.world.World
 
 object SpawnerBlockEvents {
 
@@ -83,113 +84,88 @@ object SpawnerBlockEvents {
         }
     }
 
+    /** Generates the next available spawner name in the sequence "spawner_<number>". */
+    private fun getNextSpawnerName(): String {
+        val existingNumbers = CobbleSpawnersConfig.spawners.values
+            .mapNotNull { it.spawnerName }
+            .filter { it.startsWith("spawner_") }
+            .mapNotNull { it.removePrefix("spawner_").toIntOrNull() }
+            .toSet()
+
+        var number = 1
+        while (existingNumbers.contains(number)) {
+            number++
+        }
+        return "spawner_$number"
+    }
+
     private fun placeCustomSpawner(
         player: ServerPlayerEntity,
-        world: net.minecraft.world.World,
+        world: World,
         pos: BlockPos,
         itemInHand: ItemStack
     ) {
+        // Check permissions
         if (!hasPermission(player, "CobbleSpawners.Place", 2)) {
             player.sendMessage(Text.literal("You don't have permission to place a custom spawner."), false)
             return
         }
 
+        // Check if a spawner already exists at this location
         if (CobbleSpawnersConfig.spawners.containsKey(pos)) {
             player.sendMessage(Text.literal("A spawner already exists at this location!"), false)
             return
         }
 
+        // Clear liquid blocks if present
         val blockState = world.getBlockState(pos)
         if (blockState.block == Blocks.WATER || blockState.block == Blocks.LAVA) {
             world.setBlockState(pos, Blocks.AIR.defaultState)
         }
         world.setBlockState(pos, Blocks.SPAWNER.defaultState)
 
-        val spawnerName = "spawner_${CobbleSpawnersConfig.spawners.size + 1}"
+        // Prepare dimension and Gson instance
         val dimensionString = "${world.registryKey.value.namespace}:${world.registryKey.value.path}"
+        val gson = com.google.gson.Gson()
 
-        // Create default pokemon spawn settings
-        val defaultPokemonEntry = PokemonSpawnEntry(
-            pokemonName = "", // Will be set when pokemon is selected
-            formName = null,
-            spawnChance = 100.0,
-            minLevel = 1,
-            maxLevel = 100,
-            sizeSettings = SizeSettings(
-                allowCustomSize = false,
-                minSize = 1.0f,
-                maxSize = 1.0f
-            ),
-            captureSettings = CaptureSettings(
-                isCatchable = true,
-                restrictCaptureToLimitedBalls = false,
-                requiredPokeBalls = listOf("safari_ball")
-            ),
-            ivSettings = IVSettings(
-                allowCustomIvs = false,
-                minIVHp = 0,
-                maxIVHp = 31,
-                minIVAttack = 0,
-                maxIVAttack = 31,
-                minIVDefense = 0,
-                maxIVDefense = 31,
-                minIVSpecialAttack = 0,
-                maxIVSpecialAttack = 31,
-                minIVSpecialDefense = 0,
-                maxIVSpecialDefense = 31,
-                minIVSpeed = 0,
-                maxIVSpeed = 31
-            ),
-            evSettings = EVSettings(
-                allowCustomEvsOnDefeat = false,
-                evHp = 0,
-                evAttack = 0,
-                evDefense = 0,
-                evSpecialAttack = 0,
-                evSpecialDefense = 0,
-                evSpeed = 0
-            ),
-            spawnSettings = SpawnSettings(
-                spawnTime = "ALL",
-                spawnWeather = "ALL",
-                spawnLocation = "ALL"
-            ),
-            heldItemsOnSpawn = HeldItemsOnSpawn(
-                allowHeldItemsOnSpawn = false,
-                itemsWithChance = mapOf(
-                    "minecraft:cobblestone" to 0.1,
-                    "cobblemon:pokeball" to 100.0
-                )
+        // Generate the next sequential spawner name
+        val spawnerName = getNextSpawnerName()
+
+        // Retrieve and process custom NBT data
+        val nbtComponent = itemInHand.get(DataComponentTypes.CUSTOM_DATA)
+        val spawnerData: SpawnerData = if (nbtComponent != null) {
+            val nbt = nbtComponent.getNbt() // Retrieve the NBT compound
+            val configJson = nbt.getString("CobbleSpawnerConfig")
+            val loadedData = gson.fromJson(configJson, SpawnerData::class.java)
+            // Use the new sequential name, but copy other settings from the original
+            loadedData.copy(
+                spawnerPos = pos,
+                spawnerName = spawnerName,
+                dimension = dimensionString
             )
-        )
+        } else {
+            // Default spawner data with the sequential name
+            SpawnerData(
+                spawnerPos = pos,
+                spawnerName = spawnerName,
+                selectedPokemon = mutableListOf(),
+                dimension = dimensionString,
+                spawnTimerTicks = 200,
+                spawnRadius = SpawnRadius(width = 4, height = 4),
+                spawnLimit = 4,
+                spawnAmountPerSpawn = 1,
+                visible = true
+            )
+        }
 
-        // Create SpawnerData with full initialization
-        val spawnerData = SpawnerData(
-            spawnerPos = pos,
-            spawnerName = spawnerName,
-            selectedPokemon = mutableListOf(), // We don't add the default entry yet - it will be added when a pokemon is selected
-            dimension = dimensionString,
-            spawnTimerTicks = 200,
-            spawnRadius = SpawnRadius(
-                width = 4,
-                height = 4
-            ),
-            spawnLimit = 4,
-            spawnAmountPerSpawn = 1,
-            visible = true,
-        )
-
-        // Add the spawner to both the config and map
+        // Register the spawner
         CobbleSpawnersConfig.spawners[pos] = spawnerData
         CobbleSpawnersConfig.config.spawners.add(spawnerData)
         CobbleSpawnersConfig.saveSpawnerData()
         CobbleSpawnersConfig.saveConfigBlocking()
 
-        logDebug("Placed spawner '$spawnerName' at $pos with full configuration", "cobblespawners")
-
-        CobbleSpawners.spawnerValidPositions.remove(pos)
-        player.sendMessage(Text.literal("Custom spawner '$spawnerName' placed at $pos!"), false)
-
+        // Notify the player and decrement the item if not in creative mode
+        player.sendMessage(Text.literal("Custom spawner '${spawnerData.spawnerName}' placed at $pos!"), false)
         if (!player.abilities.creativeMode) {
             itemInHand.decrement(1)
         }
@@ -215,7 +191,7 @@ object SpawnerBlockEvents {
                 CobbleSpawnersConfig.saveSpawnerData()
                 CobbleSpawnersConfig.saveConfigBlocking()
 
-                SpawnerNBTManager.clearPokemonForSpawner(world, blockPos);
+                SpawnerNBTManager.clearPokemonForSpawner(world, blockPos)
                 CobbleSpawners.spawnerValidPositions.remove(blockPos)
                 serverPlayer.sendMessage(Text.literal("Custom spawner removed at $blockPos."), false)
                 logDebug("Custom spawner removed at $blockPos.", "cobblespawners")

@@ -261,12 +261,79 @@ object CobbleSpawners : ModInitializer {
 			return false
 		}
 		val level = entry.minLevel + random.nextInt(entry.maxLevel - entry.minLevel + 1)
-		// Check for "shiny" in aspects in a case-insensitive way
 		val isShiny = entry.aspects.any { it.equals("shiny", ignoreCase = true) }
 		val propertiesString = buildPropertiesString(sanitized, level, isShiny, entry)
 		val properties = com.cobblemon.mod.common.api.pokemon.PokemonProperties.parse(propertiesString)
 		val pokemonEntity = properties.createEntity(serverWorld)
 		val pokemon = pokemonEntity.pokemon
+
+		// Safely handle moves being null
+		val moves = entry.moves ?: MovesSettings()
+
+		if (moves.allowCustomInitialMoves) {
+			// Clear the default moveset
+			pokemon.moveSet.clear()
+
+			// First collect any forced moves
+			val forcedMoves = moves.selectedMoves
+				.filter { it.forced }
+				.map { it.moveId }
+
+			// Calculate remaining move slots after forced moves
+			val remainingSlots = 4 - forcedMoves.size
+			val selectedMoves = forcedMoves.toMutableList()
+
+			// Only add non-forced moves if we have slots left
+			if (remainingSlots > 0) {
+				// Get eligible non-forced moves (level <= Pokemon's level)
+				val eligibleMoves = moves.selectedMoves
+					.filter { !it.forced && it.level <= level }
+
+				// Group moves by level
+				val movesByLevel = eligibleMoves.groupBy { it.level }
+					.toSortedMap(compareByDescending { it }) // Sort by level descending
+
+				// Process each level group to fill remaining slots
+				for ((_, movesAtLevel) in movesByLevel) {
+					if (selectedMoves.size >= 4) break
+
+					// Add moves for this level in original order
+					val movesToAdd = minOf(4 - selectedMoves.size, movesAtLevel.size)
+
+					// For the lowest level (level 1), we want to prioritize the later moves in the list
+					// For other levels, we keep the original order
+					val selectedMovesForLevel = if (movesAtLevel.firstOrNull()?.level == 1) {
+						// Take the last movesToAdd entries
+						movesAtLevel.takeLast(movesToAdd)
+					} else {
+						// Take the first movesToAdd entries
+						movesAtLevel.take(movesToAdd)
+					}
+
+					selectedMoves.addAll(selectedMovesForLevel.map { it.moveId })
+				}
+			}
+
+			// If we have more than 4 moves, trim to the first 4
+			// Forced moves stay at the beginning
+			if (selectedMoves.size > 4) {
+				selectedMoves.subList(4, selectedMoves.size).clear()
+			}
+
+			// Apply the selected moves
+			for (i in selectedMoves.indices) {
+				val moveName = selectedMoves[i].lowercase()
+				val moveTemplate = com.cobblemon.mod.common.api.moves.Moves.getByName(moveName)
+				if (moveTemplate != null) {
+					pokemon.moveSet.setMove(i, moveTemplate.create())
+				} else {
+					logger.warn("Invalid move '$moveName' for Pokémon '${entry.pokemonName}'")
+				}
+			}
+
+			// Debug log
+			logDebug("Level: $level, Selected moves: $selectedMoves", "cobblespawners")
+		}
 
 		pokemon.level = level
 		pokemon.shiny = isShiny

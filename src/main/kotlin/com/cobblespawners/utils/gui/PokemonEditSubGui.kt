@@ -140,10 +140,11 @@ object PokemonEditSubGui {
                 )
             ),
             Slots.SPAWN_SETTINGS to Triple(
-                "Edit Spawn/Level Chances", Formatting.DARK_AQUA,
+                "Edit Spawn/Level Chances/Initial Moves", Formatting.DARK_AQUA,
                 listOf(
                     "§7Customize spawn probabilities",
-                    "§7and define minimum/maximum level thresholds."
+                    "§7define minimum/maximum level thresholds.",
+                    "§7adjust the default moves the cobblemon has selected for battle"
                 )
             ),
             Slots.SIZE_SETTINGS to Triple(

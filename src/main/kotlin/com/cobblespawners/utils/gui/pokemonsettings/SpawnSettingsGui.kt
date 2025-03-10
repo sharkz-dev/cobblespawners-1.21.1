@@ -48,24 +48,26 @@ object SpawnSettingsGui {
         val action: String // "increase" or "decrease"
     )
 
-    // Define the level adjustment buttons
+    // Define the level adjustment buttons - MOVED UP ONE ROW
     private val levelButtonMap = mapOf(
-        // Min Level Adjustment Buttons
-        28 to LevelButton(28, true, "decrease"),
-        30 to LevelButton(30, true, "increase"),
-        // Max Level Adjustment Buttons
-        32 to LevelButton(32, false, "decrease"),
-        34 to LevelButton(34, false, "increase")
+        // Min Level Adjustment Buttons (moved from row 3 to row 2)
+        19 to LevelButton(19, true, "decrease"),
+        21 to LevelButton(21, true, "increase"),
+        // Max Level Adjustment Buttons (moved from row 3 to row 2)
+        23 to LevelButton(23, false, "decrease"),
+        25 to LevelButton(25, false, "increase")
     )
 
-    // Display slots for current values and toggle button (moved one slot over)
+    // Display slots for current values and toggle button (rearranged)
     private object DisplaySlots {
         const val SPAWN_CHANCE = 13
-        const val SPAWN_CHANCE_TYPE = 22  // Moved over one slot (was 21)
-        const val MIN_LEVEL = 29
-        const val MAX_LEVEL = 33
-        const val BACK_BUTTON = 49
+        const val SPAWN_CHANCE_TYPE = 31  // Moved down one row
+        const val MIN_LEVEL = 20  // Moved up one row
+        const val MAX_LEVEL = 24  // Moved up one row
+        const val MOVES_EDITOR_BUTTON = 40  // Unchanged
+        const val BACK_BUTTON = 49  // Unchanged
     }
+
 
     /**
      * Opens the Spawn Settings Editor GUI for a specific Pokémon and form.
@@ -160,6 +162,13 @@ object SpawnSettingsGui {
             return
         }
 
+        // Handle Moves Editor Button
+        if (slotIndex == DisplaySlots.MOVES_EDITOR_BUTTON) {
+            CustomGui.closeGui(player)
+            MovesSettingsGui.openMovesSettingsGui(player, spawnerPos, pokemonName, formName, additionalAspects)
+            return
+        }
+
         // Handle Back Button
         if (slotIndex == DisplaySlots.BACK_BUTTON) {
             CustomGui.closeGui(player)
@@ -204,19 +213,50 @@ object SpawnSettingsGui {
         // Add Toggle Spawn Chance Type button (head item)
         layout[DisplaySlots.SPAWN_CHANCE_TYPE] = createToggleSpawnChanceTypeHead(selectedEntry)
 
+        // Add Moves Editor Button
+        layout[DisplaySlots.MOVES_EDITOR_BUTTON] = createMovesEditorHead(selectedEntry)
+
         // Add Back Button as a head item
         layout[DisplaySlots.BACK_BUTTON] = createBackHead()
 
         // Fill remaining slots with filler stained glass panes
         val usedSlots = chanceButtonMap.keys +
                 levelButtonMap.keys +
-                listOf(DisplaySlots.SPAWN_CHANCE, DisplaySlots.SPAWN_CHANCE_TYPE, DisplaySlots.MIN_LEVEL, DisplaySlots.MAX_LEVEL, DisplaySlots.BACK_BUTTON)
+                listOf(
+                    DisplaySlots.SPAWN_CHANCE,
+                    DisplaySlots.SPAWN_CHANCE_TYPE,
+                    DisplaySlots.MIN_LEVEL,
+                    DisplaySlots.MAX_LEVEL,
+                    DisplaySlots.MOVES_EDITOR_BUTTON,
+                    DisplaySlots.BACK_BUTTON
+                )
         for (i in 0 until 54) {
             if (i !in usedSlots) {
                 layout[i] = createFillerPane()
             }
         }
         return layout
+    }
+
+    // In SpawnSettingsGui.kt, modify createMovesEditorHead function
+    private fun createMovesEditorHead(selectedEntry: PokemonSpawnEntry): ItemStack {
+        // Handle the case when moves is null by providing a default MovesSettings
+        val moves = selectedEntry.moves ?: MovesSettings()
+        val movesCount = moves.selectedMoves.size
+        val enabledText = if (moves.allowCustomInitialMoves) "§aEnabled" else "§cDisabled"
+
+        return CustomGui.createPlayerHeadButton(
+            "MovesEditorButton",
+            Text.literal("Edit Initial Selected Moves").styled { it.withColor(Formatting.WHITE).withBold(true) },
+            listOf(
+                Text.literal("§eClick to open moves editor"),
+                Text.literal("§7Configure the moves that are available on spawn for this Pokémon"),
+                Text.literal("§7Selected moves: §f$movesCount"),
+                Text.literal("§7Custom moves: $enabledText"),
+            ),
+            // Book and quill texture
+            "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZWZmZDVkZDdmZTc0MjdkNGY5NjMwOTljZWQwZGFmYmU4M2NiOWIwZjk4NGJkNmYzNjU0N2I5ZjQwMDE0MzRkOCJ9fX0="
+        )
     }
 
     /**

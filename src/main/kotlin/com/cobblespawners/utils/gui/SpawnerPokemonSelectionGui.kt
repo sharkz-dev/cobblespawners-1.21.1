@@ -49,7 +49,7 @@ object SpawnerPokemonSelectionGui {
         const val PREV_PAGE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNTMzYWQ1YzIyZGIxNjQzNWRhYWQ2MTU5MGFiYTUxZDkzNzkxNDJkZDU1NmQ2YzQyMmE3MTEwY2EzYWJlYTUwIn19fQ=="
         const val NEXT_PAGE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOGU0MDNjYzdiYmFjNzM2NzBiZDU0M2Y2YjA5NTViYWU3YjhlOTEyM2Q4M2JkNzYwZjYyMDRjNWFmZDhiZTdlMSJ9fX0="
         const val SORT_METHOD = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOWI1ZWU0MTlhZDljMDYwYzE2Y2I1M2IxZGNmZmFjOGJhY2EwYjJhMjI2NWIxYjZjN2U4ZTc4MGMzN2IxMDRjMCJ9fX0="
-        const val SPAWNER_MENU = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvODVmZmI1MjMzMmNiZmNiNWJlNTM1NTNkNjdjNzI2NDNiYTJiYjUxN2Y3ZTg5ZGVkNTNkNGE5MmIwMGNlYTczZSJ9fX0="
+        const val SPAWNER_MENU = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOGQ4YjUxZGM5NTljMzNjMjUxNWJhZDY1ODk5N2Y2Y2VlOWY4NmRmMGU3ODdiNmM2ZjhkNTA3MDY0N2JkYyJ9fX0="
         const val SPAWNER_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYTU5NDRiMzJkYjBlNzE0NjdkYzEzOWNmYzY0NjIwNWIxY2I3NGU4MjlkMmI3M2U1MzA5MzI1YzVkMTRlMDVmYSJ9fX0="
     }
 
@@ -131,7 +131,18 @@ object SpawnerPokemonSelectionGui {
                 else -> {}
             }
 
-            Slots.SPAWNER_MENU -> SpawnerListGui.openSpawnerListGui(player)
+            Slots.SPAWNER_MENU -> when (context.clickType) {
+                ClickType.LEFT -> {
+                    // Left click opens Global Settings - Pass the spawner position
+                    GlobalSettingsGui.openGlobalSettingsGui(player, spawnerPos)
+                }
+                ClickType.RIGHT -> {
+                    // Right click opens Spawner List
+                    SpawnerListGui.openSpawnerListGui(player)
+                }
+                else -> {}
+            }
+
             Slots.SPAWNER_SETTINGS -> SpawnerSettingsGui.openSpawnerSettingsGui(player, spawnerPos)
             Slots.NEXT_PAGE -> if ((currentPage + 1) * 45 < speciesListSize) {
                 playerPages[player] = currentPage + 1
@@ -264,7 +275,11 @@ object SpawnerPokemonSelectionGui {
         )
 
         layout[Slots.SPAWNER_MENU] = createButton(
-            "Spawner List Menu", Formatting.GREEN, "Click to open the spawner list menu",
+            "Global Settings", Formatting.GREEN,
+            listOf(
+                "§eLeft-click§r to open Global Settings",
+                "§eRight-click§r to open Spawner List menu"
+            ),
             Textures.SPAWNER_MENU
         )
 

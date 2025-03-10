@@ -49,7 +49,6 @@ object SpawnerListGui {
         )
     }
 
-
     /**
      * Generates the full layout for the GUI, including buttons and spawners.
      */
@@ -57,7 +56,6 @@ object SpawnerListGui {
         val layout = generateSpawnerItemsForGui(spawnerList, page).toMutableList()
 
         val previousPageSlot = 45
-        val globalSettingsSlot = 49
         val nextPageSlot = 53
 
         // Fill only the bottom row with filler panes (slots 45-53)
@@ -69,9 +67,6 @@ object SpawnerListGui {
         if (page > 0) {
             layout[previousPageSlot] = createPreviousPageButton()
         }
-
-        // Add "Edit Global Settings" button at slot 49
-        layout[globalSettingsSlot] = createGlobalSettingsButton()
 
         // Add Next Page button
         if ((page + 1) * ITEMS_PER_PAGE < spawnerList.size) {
@@ -94,13 +89,13 @@ object SpawnerListGui {
             val lore = listOf(
                 Text.literal("Location: ${pos.x}, ${pos.y}, ${pos.z}").styled { it.withColor(Formatting.GRAY).withItalic(false) },
                 Text.literal("Dimension: ${spawnerData.dimension}").styled { it.withColor(Formatting.GRAY).withItalic(false) },
-                Text.literal("Click to open GUI for this spawner").styled { it.withColor(Formatting.GRAY).withItalic(false) }
+                Text.literal("Left-click to open GUI, right-click to teleport").styled { it.withColor(Formatting.GRAY).withItalic(false) }
             )
             val spawnerHeadItem = CustomGui.createPlayerHeadButton(
                 "SpawnerTexture", // Dummy texture name, can be dynamic if needed
                 Text.literal(spawnerData.spawnerName).styled { it.withColor(Formatting.WHITE).withBold(false).withItalic(false) },
                 lore,
-                "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNjQ3ZTJlNWQ1NWI2ZDA0OTQzNTE5YmVkMjU1N2M2MzI5ZTMzYjYwYjkwOWRlZTg5MjNjZDg4YjExNTIxMCJ9fX0=" // Base64 texture value
+                "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNjQ3ZTJlNWQ1NWI2ZDA0OTQzNTE5YmVkMjU1N2M2MzI5ZTMzYjYwYjkwOWRlZTg5MjNjZDg4YjExNTIxMCJ9fX0="
             )
             layout[i - start] = spawnerHeadItem
         }
@@ -127,9 +122,6 @@ object SpawnerListGui {
                     refreshGuiItems(player, spawnerList)
                 }
             }
-            49 -> { // Global Settings Button
-                GlobalSettingsGui.openGlobalSettingsGui(player) // Open global settings
-            }
             53 -> { // Next Page
                 if (endIndex < spawnerList.size) {
                     playerPages[player] = currentPage + 1
@@ -138,10 +130,15 @@ object SpawnerListGui {
             }
             else -> { // Spawner Selection
                 val clickedName = context.clickedStack.name?.string
-                val spawnerData = spawnerList.find { it.second.spawnerName == clickedName }?.second
-
-                if (spawnerData != null) {
-                    SpawnerPokemonSelectionGui.openSpawnerGui(player, spawnerData.spawnerPos)
+                val spawnerPair = spawnerList.find { it.second.spawnerName == clickedName }
+                if (spawnerPair != null) {
+                    if (context.button == 1) { // Right-click: teleport
+                        val targetPos = spawnerPair.first
+                        player.requestTeleport(targetPos.x.toDouble() + 0.5, targetPos.y.toDouble(), targetPos.z.toDouble() + 0.5)
+                        player.sendMessage(Text.literal("Teleported to spawner at (${targetPos.x}, ${targetPos.y}, ${targetPos.z})"), false)
+                    } else { // Left-click: open spawner GUI
+                        SpawnerPokemonSelectionGui.openSpawnerGui(player, spawnerPair.second.spawnerPos)
+                    }
                 } else {
                     player.sendMessage(Text.literal("Spawner '$clickedName' not found."), false)
                 }
@@ -164,15 +161,6 @@ object SpawnerListGui {
         return ItemStack(Items.GRAY_STAINED_GLASS_PANE).apply {
             setCustomName(Text.literal(" "))
         }
-    }
-
-    private fun createGlobalSettingsButton(): ItemStack {
-        return CustomGui.createPlayerHeadButton(
-            "GlobalSettingsButton",
-            Text.literal("Edit Global Settings").styled { it.withColor(Formatting.WHITE) },
-            listOf(Text.literal("Click to edit global settings").styled { it.withColor(Formatting.GRAY) }),
-            "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTFhYTIwMzU3NTk0YjdjZWFkM2YxN2FkMTU1MjViYTg0NGZlMjRmNDM5OTNhMTViMGU3MTYyMzUwYWQzMDM1OSJ9fX0="
-        )
     }
 
     private fun createNextPageButton(): ItemStack {

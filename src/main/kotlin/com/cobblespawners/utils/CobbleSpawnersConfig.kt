@@ -1,5 +1,7 @@
 package com.cobblespawners.utils
 
+import com.cobblemon.mod.common.api.pokemon.PokemonSpecies
+import com.cobblemon.mod.common.pokemon.Species
 import com.everlastingutils.config.ConfigData
 import com.everlastingutils.config.ConfigManager
 import com.everlastingutils.config.ConfigMetadata
@@ -73,9 +75,9 @@ data class HeldItemsOnSpawn(
 data class PokemonSpawnEntry(
     val pokemonName: String,
     var formName: String? = null,
-    var aspects: Set<String> = emptySet(), // New field for aspects
+    var aspects: Set<String> = emptySet(),
     var spawnChance: Double,
-    var spawnChanceType: SpawnChanceType = SpawnChanceType.COMPETITIVE, // New chance type field
+    var spawnChanceType: SpawnChanceType = SpawnChanceType.COMPETITIVE,
     var minLevel: Int,
     var maxLevel: Int,
     var sizeSettings: SizeSettings = SizeSettings(),
@@ -83,10 +85,28 @@ data class PokemonSpawnEntry(
     val ivSettings: IVSettings,
     val evSettings: EVSettings,
     val spawnSettings: SpawnSettings,
-    var heldItemsOnSpawn: HeldItemsOnSpawn = HeldItemsOnSpawn()
+    var heldItemsOnSpawn: HeldItemsOnSpawn = HeldItemsOnSpawn(),
+    var moves: MovesSettings? = null
 )
 
+data class MovesSettings(
+    val allowCustomInitialMoves: Boolean = false,
+    val selectedMoves: List<LeveledMove> = emptyList()
+) {
+    // Properties for backward compatibility
+    val initialMoves: List<String>
+        get() = selectedMoves.map { it.moveId }
 
+    // Backward compatibility for initialMovesWithLevels
+    val initialMovesWithLevels: List<LeveledMove>
+        get() = selectedMoves
+}
+
+data class LeveledMove(
+    val level: Int,
+    val moveId: String,
+    val forced: Boolean = false  // New field with default value false
+)
 enum class SpawnChanceType {
     /** Spawns relative to the presence of other Pokémon in the spawner. */
     COMPETITIVE,
@@ -410,6 +430,10 @@ object CobbleSpawnersConfig {
         formName: String? = null,
         aspects: Set<String> = emptySet()
     ): PokemonSpawnEntry {
+        val species = PokemonSpecies.getByName(pokemonName.lowercase())
+            ?: throw IllegalArgumentException("Unknown Pokémon: $pokemonName")
+        val defaultMoves = getDefaultInitialMoves(species)
+
         return PokemonSpawnEntry(
             pokemonName = pokemonName,
             formName = formName,
@@ -423,7 +447,31 @@ object CobbleSpawnersConfig {
             ivSettings = IVSettings(),
             evSettings = EVSettings(),
             spawnSettings = SpawnSettings(),
-            heldItemsOnSpawn = HeldItemsOnSpawn()
+            heldItemsOnSpawn = HeldItemsOnSpawn(),
+            moves = MovesSettings(
+                allowCustomInitialMoves = false,
+                selectedMoves = defaultMoves
+            )
         )
     }
+
+    fun getDefaultInitialMoves(species: Species): List<LeveledMove> {
+        // Collect all moves with their level requirements
+        val movesByLevel = mutableListOf<LeveledMove>()
+
+        species.moves.levelUpMoves.forEach { (level, movesAtLevel) ->
+            if (level > 0) {
+                movesAtLevel.forEach { move ->
+                    movesByLevel.add(LeveledMove(level, move.name))
+                }
+            }
+        }
+
+        // Sort by level (ascending)
+        movesByLevel.sortBy { it.level }
+
+        return movesByLevel
+    }
+
+
 }
