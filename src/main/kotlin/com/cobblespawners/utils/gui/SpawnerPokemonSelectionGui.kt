@@ -55,7 +55,7 @@ object SpawnerPokemonSelectionGui {
 
     // Variant info data class
     data class SpeciesFormVariant(val species: Species, val form: FormData, val additionalAspects: Set<String>) {
-        fun toKey(): String = "${species.name.lowercase()}_${if (form.name.equals("Standard", ignoreCase = true))
+        fun toKey(): String = "${species.showdownId()}_${if (form.name.equals("Standard", ignoreCase = true))
             "normal" else form.name.lowercase()}_${additionalAspects.map { it.lowercase() }.sorted().joinToString(",")}"
     }
 
@@ -162,34 +162,33 @@ object SpawnerPokemonSelectionGui {
         val clickedItem = context.clickedStack
         if (clickedItem.item !is PokemonItem) return
 
-        // Parse the item name to get Pokémon info
-        val clickedItemName = CustomGui.stripFormatting(clickedItem.name?.string ?: "")
-        val (speciesName, formName, additionalAspects) = parsePokemonName(clickedItemName)
+        val parsed = parsePokemonName(CustomGui.stripFormatting(clickedItem.name?.string ?: "")) ?: return
+        val (species, formName, additionalAspects) = parsed
 
         when (context.clickType) {
             ClickType.LEFT -> {
                 val existingEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(
-                    spawnerPos, speciesName, formName, additionalAspects
+                    spawnerPos, species.showdownId(), formName, additionalAspects
                 )
 
                 if (existingEntry == null) {
                     // Add Pokémon to spawner
                     if (CobbleSpawnersConfig.addDefaultPokemonToSpawner(
-                            spawnerPos, speciesName, formName, additionalAspects
+                            spawnerPos, species.showdownId(), formName, additionalAspects
                         )) {
                         val displaySuffix = createDisplaySuffix(formName, additionalAspects)
                         player.sendMessage(
-                            Text.literal("Added $speciesName$displaySuffix to the spawner."), false
+                            Text.literal("Added ${species.name}$displaySuffix to the spawner."), false
                         )
                     }
                 } else {
                     // Remove Pokémon from spawner
                     if (CobbleSpawnersConfig.removeAndSavePokemonFromSpawner(
-                            spawnerPos, speciesName, formName, additionalAspects
+                            spawnerPos, species.showdownId(), formName, additionalAspects
                         )) {
                         val displaySuffix = createDisplaySuffix(formName, additionalAspects)
                         player.sendMessage(
-                            Text.literal("Removed $speciesName$displaySuffix from the spawner."), false
+                            Text.literal("Removed ${species.name}$displaySuffix from the spawner."), false
                         )
                     }
                 }
@@ -201,29 +200,37 @@ object SpawnerPokemonSelectionGui {
             }
             ClickType.RIGHT -> {
                 val existingEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(
-                    spawnerPos, speciesName, formName, additionalAspects
+                    spawnerPos, species.showdownId(), formName, additionalAspects
                 )
                 if (existingEntry != null) {
-                    PokemonEditSubGui.openPokemonEditSubGui(player, spawnerPos, speciesName, formName, additionalAspects)
+                    PokemonEditSubGui.openPokemonEditSubGui(player, spawnerPos, species.showdownId(), formName, additionalAspects)
                 }
             }
             else -> {}
         }
     }
 
-    private fun parsePokemonName(clickedItemName: String): Triple<String, String, Set<String>> {
+    private fun parsePokemonName(clickedItemName: String): Triple<Species, String, Set<String>>? {
         val regex = Regex("(.*) \\((.*)\\)")
         val matchResult = regex.find(clickedItemName)
 
-        return if (matchResult != null) {
-            val speciesName = matchResult.groupValues[1]
-            val formAndAspects = matchResult.groupValues[2].split(", ").map { it.trim() }
-            val formName = formAndAspects.first()
-            val additionalAspects = formAndAspects.drop(1).toSet()
-            Triple(speciesName, formName, additionalAspects)
+        val (speciesDisplayName, formAndAspectsStr) = if (matchResult != null) {
+            matchResult.groupValues[1] to matchResult.groupValues[2]
         } else {
-            Triple(clickedItemName, "Normal", emptySet())
+            clickedItemName to ""
         }
+
+        val species = getSpeciesByDisplayName(speciesDisplayName) ?: return null
+
+        val formAndAspects = formAndAspectsStr.split(", ").map { it.trim() }
+        val formName = if (formAndAspects.isNotEmpty()) formAndAspects.first() else "Normal"
+        val additionalAspects = formAndAspects.drop(1).toSet()
+
+        return Triple(species, formName, additionalAspects)
+    }
+
+    private fun getSpeciesByDisplayName(displayName: String): Species? {
+        return PokemonSpecies.species.find { it.name.equals(displayName, ignoreCase = true) }
     }
 
     private fun createDisplaySuffix(formName: String, additionalAspects: Set<String>): String {
@@ -330,7 +337,7 @@ object SpawnerPokemonSelectionGui {
 
     private fun isPokemonSelected(variant: SpeciesFormVariant, selectedPokemon: List<PokemonSpawnEntry>): Boolean {
         return selectedPokemon.any {
-            it.pokemonName.equals(variant.species.name, ignoreCase = true) &&
+            it.pokemonName.equals(variant.species.showdownId(), ignoreCase = true) &&
                     (it.formName?.equals(variant.form.name, ignoreCase = true)
                         ?: (variant.form.name == "Standard" || variant.form.name == "Normal")) &&
                     it.aspects.map { a -> a.lowercase() }.toSet() ==
@@ -347,7 +354,7 @@ object SpawnerPokemonSelectionGui {
 
         // Find the entry and create the item
         val entry = selectedPokemon.find {
-            it.pokemonName.equals(species.name, ignoreCase = true) &&
+            it.pokemonName.equals(species.showdownId(), ignoreCase = true) &&
                     (it.formName?.equals(form.name, ignoreCase = true)
                         ?: (form.name == "Standard" || form.name == "Normal")) &&
                     it.aspects.map { a -> a.lowercase() }.toSet() ==
@@ -433,7 +440,7 @@ object SpawnerPokemonSelectionGui {
         additionalAspects: Set<String>,
         showFormsInGui: Boolean
     ): String {
-        val propertiesStringBuilder = StringBuilder(species.name)
+        val propertiesStringBuilder = StringBuilder(species.showdownId())
 
         if (showFormsInGui && form.name != "Standard") {
             if (form.aspects.isNotEmpty()) {
