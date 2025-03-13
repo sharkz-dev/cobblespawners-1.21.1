@@ -378,9 +378,16 @@ object CobbleSpawners : ModInitializer {
 		entry: PokemonSpawnEntry
 	): String {
 		val builder = StringBuilder(sanitizedName).append(" level=$level")
-		// Append each aspect from the config as a property (case-insensitive)
+
+		// Append each aspect from the config using the aspect=value format
 		entry.aspects.forEach { aspect ->
-			builder.append(" ${aspect.lowercase()}=true")
+			// Check if the aspect already has a special format (contains "=")
+			if (aspect.contains("=")) {
+				builder.append(" ${aspect.lowercase()}")
+			} else {
+				// Use the aspect=value format instead of value=true
+				builder.append(" aspect=${aspect.lowercase()}")
+			}
 		}
 
 		val formName = entry.formName
@@ -397,7 +404,8 @@ object CobbleSpawners : ModInitializer {
 				if (matchedForm != null) {
 					if (matchedForm.aspects.isNotEmpty()) {
 						matchedForm.aspects.forEach { aspect ->
-							builder.append(" ${aspect.lowercase()}=true")
+							// Apply form aspects using the aspect=value format
+							builder.append(" aspect=${aspect.lowercase()}")
 						}
 					} else {
 						builder.append(" form=${matchedForm.formOnlyShowdownId()}")

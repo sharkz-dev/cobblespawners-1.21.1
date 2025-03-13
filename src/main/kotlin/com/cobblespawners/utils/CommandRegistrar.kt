@@ -296,6 +296,26 @@ object CommandRegistrar {
                 )
             }
 
+            subcommand("togglevisibility", permission = "CobbleSpawners.ToggleVisibility") {
+                executes { ctx ->
+                    sendError(ctx, "Usage: /cobblespawners togglevisibility <spawnerName>")
+                    0
+                }
+
+                then(
+                    argument("spawnerName", StringArgumentType.string())
+                        .suggests { context: CommandContext<ServerCommandSource>, builder: SuggestionsBuilder ->
+                            val completableFuture = CompletableFuture<Suggestions>()
+                            // Add all existing spawner names as suggestions
+                            CobbleSpawnersConfig.spawners.values.forEach { spawner ->
+                                builder.suggest(spawner.spawnerName)
+                            }
+                            completableFuture.complete(builder.build())
+                            completableFuture
+                        }
+                        .executes { ctx -> handleToggleVisibility(ctx) }
+                )
+            }
 
 
             // "gui" subcommand: /cobblespawners listgui
@@ -735,25 +755,23 @@ object CommandRegistrar {
     }
 
     private fun handleToggleVisibility(ctx: CommandContext<ServerCommandSource>): Int {
-        val args = getArgs(ctx)
-        if (args.size < 3) {
-            sendError(ctx, "Usage: /cobblespawners togglevisibility <spawnerName>")
-            return 0
-        }
-        val spawnerName = args[2]
+        val spawnerName = StringArgumentType.getString(ctx, "spawnerName")
         val spawnerData = CobbleSpawnersConfig.spawners.values.find { it.spawnerName == spawnerName }
+
         if (spawnerData == null) {
             sendError(ctx, "Spawner '$spawnerName' not found.")
             return 0
         }
-        if (CommandRegistrarUtil.toggleSpawnerVisibility(ctx.source.server, spawnerData.spawnerPos)) {
-            sendSuccess(ctx, "Spawner '$spawnerName' visibility toggled.")
-            return 1
-        }
-        sendError(ctx, "Failed to toggle visibility for '$spawnerName'.")
-        return 0
-    }
 
+        val success = CommandRegistrarUtil.toggleSpawnerVisibility(ctx.source.server, spawnerData.spawnerPos)
+        if (success) {
+            sendSuccess(ctx, "Visibility for spawner '$spawnerName' toggled to ${if (spawnerData.visible) "visible" else "invisible"}.")
+            return 1
+        } else {
+            sendError(ctx, "Failed to toggle visibility for spawner '$spawnerName'.")
+            return 0
+        }
+    }
     private fun handleToggleRadius(ctx: CommandContext<ServerCommandSource>): Int {
         val spawnerName = StringArgumentType.getString(ctx, "spawnerName")
         val spawnerData = CobbleSpawnersConfig.spawners.values.find { it.spawnerName == spawnerName }

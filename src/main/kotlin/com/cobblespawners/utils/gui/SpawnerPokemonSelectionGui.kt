@@ -7,6 +7,8 @@ import com.everlastingutils.gui.setCustomName
 import com.cobblespawners.utils.*
 import com.cobblemon.mod.common.api.pokemon.PokemonProperties
 import com.cobblemon.mod.common.api.pokemon.PokemonSpecies
+import com.cobblemon.mod.common.api.pokemon.feature.SpeciesFeatures
+import com.cobblemon.mod.common.api.pokemon.feature.ChoiceSpeciesFeatureProvider
 import com.cobblemon.mod.common.item.PokemonItem
 import com.cobblemon.mod.common.pokemon.FormData
 import com.cobblemon.mod.common.pokemon.Species
@@ -19,13 +21,14 @@ import net.minecraft.util.Formatting
 import net.minecraft.util.math.BlockPos
 import org.joml.Vector4f
 import org.slf4j.LoggerFactory
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 
 enum class SortMethod {
     ALPHABETICAL,   // Sort by name alphabetically
-    TYPE,           // Sort by Pokemon type
-    SELECTED,       // Show selected Pokemon first
-    SEARCH          // Show Pokemon matching search term
+    TYPE,           // Sort by Pokémon type
+    SELECTED,       // Show selected Pokémon first
+    SEARCH          // Show Pokémon matching search term
 }
 
 object SpawnerPokemonSelectionGui {
@@ -34,6 +37,14 @@ object SpawnerPokemonSelectionGui {
     var searchTerm = ""  // Store the current search term
     val playerPages = ConcurrentHashMap<ServerPlayerEntity, Int>()
     val spawnerGuisOpen = ConcurrentHashMap<BlockPos, ServerPlayerEntity>()
+
+    // Caching for full variants (avoids repeated heavy computations)
+    private var cachedVariants: List<SpeciesFormVariant>? = null
+    private var cachedSortMethod: SortMethod? = null
+    private var cachedSearchTerm: String? = null
+
+    // Cache for additional aspect sets per species name (keyed in lowercase)
+    private val additionalAspectsCache = mutableMapOf<String, List<Set<String>>>()
 
     // UI constants
     private object Slots {
@@ -55,21 +66,25 @@ object SpawnerPokemonSelectionGui {
 
     // Variant info data class
     data class SpeciesFormVariant(val species: Species, val form: FormData, val additionalAspects: Set<String>) {
-        fun toKey(): String = "${species.showdownId()}_${if (form.name.equals("Standard", ignoreCase = true))
-            "normal" else form.name.lowercase()}_${additionalAspects.map { it.lowercase() }.sorted().joinToString(",")}"
+        fun toKey(): String = "${species.showdownId()}_${if (form.name.equals("Standard", ignoreCase = true)) "normal" else form.name.lowercase()}_${additionalAspects.map { it.lowercase() }.sorted().joinToString(",")}"
     }
+
+    // Track ongoing computations per player
+    private val playerComputations = ConcurrentHashMap<ServerPlayerEntity, CompletableFuture<Void>>()
 
     fun isSpawnerGuiOpen(spawnerPos: BlockPos): Boolean = spawnerGuisOpen.containsKey(spawnerPos)
 
-    // MAIN GUI FUNCTIONS
+    // ### Main GUI Functions
 
     fun openSpawnerGui(player: ServerPlayerEntity, spawnerPos: BlockPos, page: Int = 0) {
         if (!CommandManager.hasPermissionOrOp(player.commandSource, "CobbleSpawners.Edit", 2, 2)) {
-            player.sendMessage(Text.literal("You don't have permission to use this GUI."), false); return
+            player.sendMessage(Text.literal("You don't have permission to use this GUI."), false)
+            return
         }
 
         val currentSpawnerData = CobbleSpawnersConfig.spawners[spawnerPos] ?: run {
-            player.sendMessage(Text.literal("Spawner data not found"), false); return
+            player.sendMessage(Text.literal("Spawner data not found"), false)
+            return
         }
 
         spawnerGuisOpen[spawnerPos] = player
@@ -98,7 +113,6 @@ object SpawnerPokemonSelectionGui {
     ) {
         val clickedSlot = context.slotIndex
         val currentPage = playerPages[player] ?: 0
-        val speciesListSize = getSortedSpeciesList(selectedPokemon).size
 
         when (clickedSlot) {
             Slots.PREV_PAGE -> if (currentPage > 0) {
@@ -118,6 +132,11 @@ object SpawnerPokemonSelectionGui {
                     // Clear the search term if we're not in search mode
                     if (sortMethod != SortMethod.SEARCH) {
                         searchTerm = ""
+                    }
+
+                    // Invalidate cache when sort method changes (unless in SELECTED mode)
+                    if (sortMethod != SortMethod.SELECTED) {
+                        cachedVariants = null
                     }
 
                     CobbleSpawnersConfig.saveSpawnerData()
@@ -144,9 +163,12 @@ object SpawnerPokemonSelectionGui {
             }
 
             Slots.SPAWNER_SETTINGS -> SpawnerSettingsGui.openSpawnerSettingsGui(player, spawnerPos)
-            Slots.NEXT_PAGE -> if ((currentPage + 1) * 45 < speciesListSize) {
-                playerPages[player] = currentPage + 1
-                refreshGuiItems(player, selectedPokemon, currentPage + 1)
+            Slots.NEXT_PAGE -> {
+                val totalVariants = getTotalVariantsCount(selectedPokemon)
+                if ((currentPage + 1) * 45 < totalVariants) {
+                    playerPages[player] = currentPage + 1
+                    refreshGuiItems(player, selectedPokemon, currentPage + 1)
+                }
             }
             else -> handlePokemonItemClick(context, player, spawnerPos, selectedPokemon, currentPage)
         }
@@ -242,25 +264,38 @@ object SpawnerPokemonSelectionGui {
     }
 
     private fun refreshGuiItems(player: ServerPlayerEntity, selectedPokemon: List<PokemonSpawnEntry>, page: Int) {
-        CustomGui.refreshGui(player, generateFullGuiLayout(selectedPokemon, page))
+        // Cancel any ongoing computation
+        playerComputations[player]?.cancel(false)
+
+        // Start a new computation asynchronously
+        val future = CompletableFuture.runAsync {
+            try {
+                val items = generateFullGuiLayout(selectedPokemon, page)
+                // Update GUI on the main thread
+                player.server.execute {
+                    CustomGui.refreshGui(player, items)
+                    playerComputations.remove(player) // Clean up after completion
+                }
+            } catch (e: Exception) {
+                logger.error("Error computing GUI items for player ${player.name.string}", e)
+            }
+        }
+        playerComputations[player] = future
     }
 
     private fun generateFullGuiLayout(selectedPokemon: List<PokemonSpawnEntry>, page: Int): List<ItemStack> {
         val layout = generatePokemonItemsForGui(selectedPokemon, page).toMutableList()
-        val speciesListSize = getSortedSpeciesList(selectedPokemon).size
+        val totalVariants = getTotalVariantsCount(selectedPokemon)
 
-        // Add navigation buttons
         layout[Slots.PREV_PAGE] = if (page > 0) createButton(
             "Previous", Formatting.YELLOW, "Click to go to the previous page", Textures.PREV_PAGE
         ) else createFillerPane()
 
-        // Update sort method button text to show search info if in search mode
         val sortMethodText = if (sortMethod == SortMethod.SEARCH) {
             "Searching: ${if (searchTerm.length > 10) searchTerm.take(7) + "..." else searchTerm}"
         } else {
             "Sort Method"
         }
-
         val sortMethodLore = if (sortMethod == SortMethod.SEARCH) {
             listOf(
                 "Current Search: \"$searchTerm\"",
@@ -274,38 +309,29 @@ object SpawnerPokemonSelectionGui {
                 "Right-click to search by name"
             )
         }
-
-        layout[Slots.SORT_METHOD] = createButton(
-            sortMethodText, Formatting.AQUA,
-            sortMethodLore,
-            Textures.SORT_METHOD
-        )
+        layout[Slots.SORT_METHOD] = createButton(sortMethodText, Formatting.AQUA, sortMethodLore, Textures.SORT_METHOD)
 
         layout[Slots.SPAWNER_MENU] = createButton(
             "Global Settings", Formatting.GREEN,
-            listOf(
-                "§eLeft-click§r to open Global Settings",
-                "§eRight-click§r to open Spawner List menu"
-            ),
+            listOf("§eLeft-click§r to open Global Settings", "§eRight-click§r to open Spawner List menu"),
             Textures.SPAWNER_MENU
         )
 
         layout[Slots.SPAWNER_SETTINGS] = createButton(
             "Edit This Spawner's Settings", Formatting.RED,
-            "Click to edit the current spawner's settings", Textures.SPAWNER_SETTINGS
+            "Click to edit the current spawner’s settings", Textures.SPAWNER_SETTINGS
         )
 
-        layout[Slots.NEXT_PAGE] = if ((page + 1) * 45 < speciesListSize) createButton(
+        layout[Slots.NEXT_PAGE] = if ((page + 1) * 45 < totalVariants) createButton(
             "Next", Formatting.GREEN, "Click to go to the next page", Textures.NEXT_PAGE
         ) else createFillerPane()
 
-        // Fill empty slots
         listOf(46, 47, 51, 52).forEach { layout[it] = createFillerPane() }
 
         return layout
     }
 
-    // POKEMON ITEMS GENERATION
+    // ### Pokémon Items Generation
 
     private fun generatePokemonItemsForGui(
         selectedPokemon: List<PokemonSpawnEntry>,
@@ -313,22 +339,15 @@ object SpawnerPokemonSelectionGui {
     ): List<ItemStack> {
         val layout = MutableList(54) { ItemStack.EMPTY }
         val pageSize = 45
+        val variantsList = getVariantsForPage(selectedPokemon, page, pageSize)
 
-        val variantsList = getSortedSpeciesList(selectedPokemon)
-        val start = page * pageSize
-        val end = minOf(start + pageSize, variantsList.size)
-
-        for (i in start until end) {
+        for (i in variantsList.indices) {
             val variant = variantsList[i]
-            val slotIndex = i - start
-
-            if (slotIndex in 0 until pageSize) {
-                val isSelected = isPokemonSelected(variant, selectedPokemon)
-                layout[slotIndex] = if (isSelected) {
-                    createSelectedPokemonItem(variant, selectedPokemon)
-                } else {
-                    createUnselectedPokemonItem(variant)
-                }
+            val isSelected = isPokemonSelected(variant, selectedPokemon)
+            layout[i] = if (isSelected) {
+                createSelectedPokemonItem(variant, selectedPokemon)
+            } else {
+                createUnselectedPokemonItem(variant)
             }
         }
 
@@ -432,7 +451,7 @@ object SpawnerPokemonSelectionGui {
         return unselectedItem
     }
 
-    // UTILITY FUNCTIONS
+    // ### Utility Functions
 
     private fun buildPropertiesString(
         species: Species,
@@ -442,18 +461,27 @@ object SpawnerPokemonSelectionGui {
     ): String {
         val propertiesStringBuilder = StringBuilder(species.showdownId())
 
+        // Add form information
         if (showFormsInGui && form.name != "Standard") {
             if (form.aspects.isNotEmpty()) {
                 for (aspect in form.aspects) {
-                    propertiesStringBuilder.append(" ").append("$aspect=true")
+                    // Use aspect=value format for form aspects
+                    propertiesStringBuilder.append(" aspect=").append(aspect.lowercase())
                 }
             } else {
                 propertiesStringBuilder.append(" form=${form.formOnlyShowdownId()}")
             }
         }
 
+        // Add additional aspects using the aspect=value format
         for (aspect in additionalAspects) {
-            propertiesStringBuilder.append(" ").append("$aspect=true")
+            // Check if the aspect already contains "="
+            if (aspect.contains("=")) {
+                propertiesStringBuilder.append(" ").append(aspect.lowercase())
+            } else {
+                // Otherwise use the aspect=value format
+                propertiesStringBuilder.append(" aspect=").append(aspect.lowercase())
+            }
         }
 
         return propertiesStringBuilder.toString()
@@ -481,96 +509,145 @@ object SpawnerPokemonSelectionGui {
         return species.name + formAndAspectsStr
     }
 
-    // SORTING FUNCTIONS
+    // ### Sorting Functions
 
-    fun getSortedSpeciesList(selectedPokemon: List<PokemonSpawnEntry>): List<SpeciesFormVariant> {
+    // Computes the full list of variants (with caching unless sort mode is SELECTED)
+    private fun getAllVariants(selectedPokemon: List<PokemonSpawnEntry>): List<SpeciesFormVariant> {
         val showUnimplemented = CobbleSpawnersConfig.config.globalConfig.showUnimplementedPokemonInGui
         val showFormsInGui = CobbleSpawnersConfig.config.globalConfig.showFormsInGui
 
-        // Get and filter species
-        val speciesList = PokemonSpecies.species.filter { showUnimplemented || it.implemented }
+        if (sortMethod != SortMethod.SELECTED) {
+            if (cachedVariants != null && cachedSortMethod == sortMethod && cachedSearchTerm == searchTerm) {
+                return cachedVariants!!
+            }
+        }
 
-        // Create variants list
-        val variantsList = speciesList.flatMap { species ->
-            val forms = if (showFormsInGui && species.forms.isNotEmpty())
-                species.forms else listOf(species.standardForm)
+        val sortedSpecies = when (sortMethod) {
+            SortMethod.ALPHABETICAL -> PokemonSpecies.species.filter { showUnimplemented || it.implemented }.sortedBy { it.name }
+            SortMethod.TYPE -> PokemonSpecies.species.filter { showUnimplemented || it.implemented }.sortedBy { it.primaryType.name }
+            SortMethod.SELECTED -> {
+                PokemonSpecies.species.filter { showUnimplemented || it.implemented }.sortedWith(compareBy(
+                    { !selectedPokemon.any { p -> p.pokemonName.equals(it.showdownId(), ignoreCase = true) } },
+                    { it.name }
+                ))
+            }
+            SortMethod.SEARCH -> {
+                if (searchTerm.isBlank()) {
+                    PokemonSpecies.species.filter { showUnimplemented || it.implemented }.sortedBy { it.name }
+                } else {
+                    val searchTermLower = searchTerm.lowercase()
+                    PokemonSpecies.species.filter {
+                        (showUnimplemented || it.implemented) && it.name.lowercase().contains(searchTermLower)
+                    }.sortedBy { it.name }
+                }
+            }
+        }
 
-            forms.flatMap { form ->
+        val variantsList = mutableListOf<SpeciesFormVariant>()
+        for (species in sortedSpecies) {
+            val forms = if (showFormsInGui && species.forms.isNotEmpty()) species.forms else listOf(species.standardForm)
+            val additionalAspectSets = getAdditionalAspectSets(species)
+            val variants = forms.flatMap { form ->
                 listOf(
                     SpeciesFormVariant(species, form, emptySet()),
                     SpeciesFormVariant(species, form, setOf("shiny"))
-                ) + getAdditionalAspectSets(species).map { SpeciesFormVariant(species, form, it) }
-            }
-        }.distinctBy { it.toKey() }
+                ) + additionalAspectSets.map { SpeciesFormVariant(species, form, it) }
+            }.distinctBy { it.toKey() }
+            variantsList.addAll(variants)
+        }
 
-        // Apply sorting
-        return when (sortMethod) {
-            SortMethod.ALPHABETICAL ->
-                variantsList.sortedBy { it.species.name + it.form.name + it.additionalAspects.joinToString() }
+        if (sortMethod != SortMethod.SELECTED) {
+            cachedVariants = variantsList
+            cachedSortMethod = sortMethod
+            cachedSearchTerm = searchTerm
+        }
+        return variantsList
+    }
 
-            SortMethod.TYPE ->
-                variantsList.sortedBy { it.species.primaryType.name }
+    private fun getVariantsForPage(selectedPokemon: List<PokemonSpawnEntry>, page: Int, pageSize: Int): List<SpeciesFormVariant> {
+        val allVariants = getAllVariants(selectedPokemon)
+        val startIndex = page * pageSize
+        val endIndex = minOf(startIndex + pageSize, allVariants.size)
+        return if (startIndex < allVariants.size) allVariants.subList(startIndex, endIndex) else emptyList()
+    }
 
-            SortMethod.SELECTED -> {
-                // Build keys for selected Pokémon
-                val selectedSet = selectedPokemon.map { it.toKey() }.toSet()
+    private fun getTotalVariantsCount(selectedPokemon: List<PokemonSpawnEntry>): Int {
+        return getAllVariants(selectedPokemon).size
+    }
 
-                // Separate selected and unselected
-                variantsList.sortedWith(compareBy(
-                    { !selectedSet.contains(it.toKey()) }, // Selected first
-                    { it.species.name } // Then by name
-                ))
-            }
+    private fun getAdditionalAspectSets(species: Species): List<Set<String>> {
+        return additionalAspectsCache.getOrPut(species.name.lowercase()) {
+            val aspectSets = mutableListOf<Set<String>>()
+            val speciesSpecificAspects = mutableSetOf<String>()
 
-            SortMethod.SEARCH -> {
-                if (searchTerm.isBlank()) {
-                    // If search term is empty, revert to alphabetical
-                    variantsList.sortedBy { it.species.name }
-                } else {
-                    // Filter by search term and prioritize exact matches
-                    val searchTermLower = searchTerm.lowercase()
-                    val exactMatches = variantsList.filter {
-                        it.species.name.lowercase() == searchTermLower
+            try {
+                // Create a temporary Pokémon to access its features
+                val tempPokemon = species.create()
+
+                // Get aspects from form data directly
+                for (form in species.forms) {
+                    form.aspects.forEach { aspect ->
+                        speciesSpecificAspects.add(aspect)
                     }
-                    val startsWithMatches = variantsList.filter {
-                        it.species.name.lowercase().startsWith(searchTermLower) &&
-                                !exactMatches.contains(it)
-                    }
-                    val containsMatches = variantsList.filter {
-                        it.species.name.lowercase().contains(searchTermLower) &&
-                                !exactMatches.contains(it) &&
-                                !startsWithMatches.contains(it)
-                    }
-                    val otherMatches = variantsList.filter {
-                        !exactMatches.contains(it) &&
-                                !startsWithMatches.contains(it) &&
-                                !containsMatches.contains(it)
-                    }
+                }
 
-                    // Combine all the matches in order of relevance
-                    exactMatches.sortedBy { it.species.name } +
-                            startsWithMatches.sortedBy { it.species.name } +
-                            containsMatches.sortedBy { it.species.name } +
-                            otherMatches.sortedBy { it.species.name }
+                // Use reflection to access the SpeciesFeatures if direct method isn’t available
+                val speciesFeatures = try {
+                    val featuresClass = Class.forName("com.cobblemon.mod.common.api.pokemon.feature.SpeciesFeatures")
+                    val instanceField = featuresClass.getDeclaredField("INSTANCE")
+                    val instance = instanceField.get(null)
+                    val getFeaturesMethod = featuresClass.getDeclaredMethod("getFeaturesFor", Class.forName("com.cobblemon.mod.common.pokemon.Species"))
+                    getFeaturesMethod.invoke(instance, species) as? Collection<*> ?: emptyList<Any>()
+                } catch (e: Exception) {
+                    logger.debug("Couldn’t access SpeciesFeatures via reflection: ${e.message}")
+                    emptyList<Any>()
+                }
+
+                // Process any feature providers found
+                speciesFeatures.filterIsInstance<ChoiceSpeciesFeatureProvider>().forEach { provider ->
+                    try {
+                        val aspects = provider.getAllAspects()
+                        aspects.forEach { speciesSpecificAspects.add(it) }
+                    } catch (e: Exception) {
+                        logger.debug("Error accessing aspects from provider: ${e.message}")
+                    }
+                }
+
+                // Check for specific hardcoded aspects (for backward compatibility)
+                when (species.name.lowercase()) {
+                    "forretress" -> speciesSpecificAspects.add("shulker")
+                    // Add other special cases as needed
+                }
+
+                // Add individual aspect sets
+                for (aspect in speciesSpecificAspects) {
+                    aspectSets.add(setOf(aspect))
+                    // Add combined with shiny
+                    aspectSets.add(setOf(aspect, "shiny"))
+                }
+
+                // Add shiny by itself
+                aspectSets.add(setOf("shiny"))
+
+                // Remove duplicates
+                aspectSets.distinctBy { it.toSortedSet().joinToString(",") }
+            } catch (e: Exception) {
+                logger.error("Error in getAdditionalAspectSets for ${species.name}: ${e.message}")
+                // Fallback with hardcoded values
+                when (species.name.lowercase()) {
+                    else -> listOf(setOf("shiny"))
                 }
             }
         }
     }
 
-    private fun getAdditionalAspectSets(species: Species): List<Set<String>> {
-        return when (species.name.lowercase()) {
-            "forretress" -> listOf(setOf("shulker"), setOf("shulker", "shiny"))
-            else -> emptyList()
-        }
-    }
-
-    // Helper function to convert a PokemonSpawnEntry to a key for matching
+    // Helper function to convert a PokémonSpawnEntry to a key for matching
     private fun PokemonSpawnEntry.toKey(): String {
         val formName = (this.formName ?: "normal").lowercase()
         return "${this.pokemonName.lowercase()}_${formName}_${this.aspects.map { it.lowercase() }.sorted().joinToString(",")}"
     }
 
-    // BUTTON CREATION FUNCTIONS
+    // ### Button Creation Functions
 
     private fun createButton(
         text: String,

@@ -23,52 +23,40 @@ import kotlin.math.roundToInt
 object SizeSettingsGui {
     private val logger = LoggerFactory.getLogger(SizeSettingsGui::class.java)
 
-    // GUI Slot configuration
     private object Slots {
-        const val TOGGLE_CUSTOM_SIZE = 19
-        const val MIN_SIZE = 23
-        const val MAX_SIZE = 25
+        const val TOGGLE_CUSTOM_SIZE = 40
+        const val MIN_SIZE_DISPLAY = 13
+        const val MAX_SIZE_DISPLAY = 22
         const val BACK_BUTTON = 49
     }
 
-    // Size adjustment configuration
-    private const val SIZE_ADJUSTMENT_VALUE = 0.1f
-    private const val MIN_SIZE_BOUND = 0.5f
-    private const val MAX_SIZE_BOUND = 3.0f
+    private const val MIN_SIZE_BOUND = 0.0005f
+    private const val MAX_SIZE_BOUND = 3000.0f
 
-    // Button configuration
-    private data class SizeButton(
-        val slot: Int,
-        val label: String,
-        val textureValue: String,
+    data class SizeAdjustmentButton(
+        val slotIndex: Int,
         val isMinSize: Boolean,
-        val formatting: Formatting
+        val action: String, // "increase" or "decrease"
+        val leftDelta: Float,
+        val rightDelta: Float
     )
 
-    // Map of size buttons
-    private val sizeButtons = listOf(
-        SizeButton(
-            Slots.MIN_SIZE,
-            "Min Size",
-            "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTZhMDExZTYyNmI3MWNlYWQ5ODQxOTM1MTFlODJlNjVjMTM1OTU2NWYwYTJmY2QxMTg0ODcyZjg5ZDkwOGM2NSJ9fX0=",
-            true,
-            Formatting.GREEN
-        ),
-        SizeButton(
-            Slots.MAX_SIZE,
-            "Max Size",
-            "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTU3YTViZGY0MmYxNTIxNzhkMTU0YmIyMjM3ZDlmZDM1NzcyYTdmMzJiY2ZkMzNiZWViOGVkYzQ4MjBiYSJ9fX0=",
-            false,
-            Formatting.BLUE
-        )
+    private val minSizeButtons = listOf(
+        SizeAdjustmentButton(11, true, "decrease", -0.1f, -0.5f),
+        SizeAdjustmentButton(12, true, "decrease", -1.0f, -5.0f),
+        SizeAdjustmentButton(14, true, "increase", 0.1f, 0.5f),
+        SizeAdjustmentButton(15, true, "increase", 1.0f, 5.0f)
     )
 
-    // Lookup map for size buttons by slot
-    private val sizeButtonsBySlot = sizeButtons.associateBy { it.slot }
+    private val maxSizeButtons = listOf(
+        SizeAdjustmentButton(20, false, "decrease", -0.1f, -0.5f),
+        SizeAdjustmentButton(21, false, "decrease", -1.0f, -5.0f),
+        SizeAdjustmentButton(23, false, "increase", 0.1f, 0.5f),
+        SizeAdjustmentButton(24, false, "increase", 1.0f, 5.0f)
+    )
 
-    /**
-     * Opens the Size Editing GUI for a specific Pokémon and form.
-     */
+    private val sizeAdjustmentButtons = (minSizeButtons + maxSizeButtons).associateBy { it.slotIndex }
+
     fun openSizeEditorGui(
         player: ServerPlayerEntity,
         spawnerPos: BlockPos,
@@ -76,7 +64,6 @@ object SizeSettingsGui {
         formName: String?,
         additionalAspects: Set<String>
     ) {
-        // Get the Pokémon entry using additionalAspects for proper lookup
         val standardFormName = formName ?: "Standard"
         val selectedEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, standardFormName, additionalAspects)
         if (selectedEntry == null) {
@@ -91,7 +78,6 @@ object SizeSettingsGui {
         val layout = generateSizeEditorLayout(selectedEntry)
         spawnerGuisOpen[spawnerPos] = player
 
-        // Build the title including the aspects
         val aspectsDisplay = if (additionalAspects.isNotEmpty()) additionalAspects.joinToString(", ") else ""
         val guiTitle = if (aspectsDisplay.isNotEmpty())
             "Edit Size Settings for ${selectedEntry.pokemonName} (${selectedEntry.formName ?: "Standard"}, $aspectsDisplay)"
@@ -107,9 +93,6 @@ object SizeSettingsGui {
         )
     }
 
-    /**
-     * Handles GUI interactions
-     */
     private fun handleInteraction(
         context: InteractionContext,
         player: ServerPlayerEntity,
@@ -122,39 +105,29 @@ object SizeSettingsGui {
         val slotIndex = context.slotIndex
 
         when (slotIndex) {
-            // Handle toggle custom size button
             Slots.TOGGLE_CUSTOM_SIZE -> {
                 toggleAllowCustomSize(spawnerPos, pokemonName, formName, player, additionalAspects)
-                return
             }
-
-            // Handle size adjustment buttons
-            Slots.MIN_SIZE, Slots.MAX_SIZE -> {
-                sizeButtonsBySlot[slotIndex]?.let { button ->
-                    val increase = when (context.clickType) {
-                        ClickType.LEFT -> false
-                        ClickType.RIGHT -> true
-                        else -> return
-                    }
-                    adjustSize(spawnerPos, pokemonName, formName, player, button.isMinSize, increase, additionalAspects)
-                }
-                return
-            }
-
-            // Handle back button
             Slots.BACK_BUTTON -> {
                 CustomGui.closeGui(player)
                 player.sendMessage(Text.literal("Returning to Edit Pokémon menu."), false)
-                PokemonEditSubGui.openPokemonEditSubGui(
-                    player, spawnerPos, pokemonName, formName, additionalAspects
-                )
+                PokemonEditSubGui.openPokemonEditSubGui(player, spawnerPos, pokemonName, formName, additionalAspects)
+            }
+            else -> {
+                sizeAdjustmentButtons[slotIndex]?.let { button ->
+                    val delta = when (context.clickType) {
+                        ClickType.LEFT -> button.leftDelta
+                        ClickType.RIGHT -> button.rightDelta
+                        else -> 0f
+                    }
+                    if (delta != 0f) {
+                        adjustSize(spawnerPos, pokemonName, formName, player, button.isMinSize, delta, additionalAspects)
+                    }
+                }
             }
         }
     }
 
-    /**
-     * Handles GUI close
-     */
     private fun handleClose(
         inventory: Inventory,
         spawnerPos: BlockPos,
@@ -162,34 +135,67 @@ object SizeSettingsGui {
         formName: String?
     ) {
         spawnerGuisOpen.remove(spawnerPos)
-        // No need to send message to player here as the player is probably null at this point
     }
 
-    /**
-     * Generates the layout for the Size Editing GUI.
-     */
     private fun generateSizeEditorLayout(entry: PokemonSpawnEntry): List<ItemStack> {
         val layout = MutableList(54) { createFillerPane() }
         val sizeSettings = entry.sizeSettings
 
-        // Add toggle button
-        layout[Slots.TOGGLE_CUSTOM_SIZE] = createToggleCustomSizeButton(sizeSettings.allowCustomSize)
-
-        // Add size adjustment buttons
-        sizeButtons.forEach { button ->
-            val currentSize = if (button.isMinSize) sizeSettings.minSize else sizeSettings.maxSize
-            layout[button.slot] = createSizeAdjusterButton(button, currentSize, sizeSettings.allowCustomSize)
+        (minSizeButtons + maxSizeButtons).forEach { button ->
+            layout[button.slotIndex] = createSizeAdjustmentButton(button, sizeSettings, entry)
         }
 
-        // Add back button
+        layout[Slots.MIN_SIZE_DISPLAY] = createCurrentValueHead("Current Min Size", "Min Size", sizeSettings.minSize)
+        layout[Slots.MAX_SIZE_DISPLAY] = createCurrentValueHead("Current Max Size", "Max Size", sizeSettings.maxSize)
+
+        layout[Slots.TOGGLE_CUSTOM_SIZE] = createToggleCustomSizeButton(sizeSettings.allowCustomSize)
         layout[Slots.BACK_BUTTON] = createBackButton()
 
         return layout
     }
 
-    /**
-     * Creates a toggle button for custom sizes.
-     */
+    private fun createSizeAdjustmentButton(
+        button: SizeAdjustmentButton,
+        sizeSettings: SizeSettings,
+        entry: PokemonSpawnEntry
+    ): ItemStack {
+        val isMinSize = button.isMinSize
+        val currentSize = if (isMinSize) sizeSettings.minSize else sizeSettings.maxSize
+        val label = if (isMinSize) "Min Size" else "Max Size"
+        val actionText = if (button.action == "increase") "Increase" else "Decrease"
+        val deltaTextLeft = "%.1f".format(button.leftDelta)
+        val deltaTextRight = "%.1f".format(button.rightDelta)
+        val itemName = "$actionText $label"
+
+        val lore = listOf(
+            "Current $label: %.2f".format(currentSize),
+            "Left-click: $actionText by $deltaTextLeft",
+            "Right-click: $actionText by $deltaTextRight"
+        )
+
+        val textureValue = if (button.action == "increase") {
+            "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTU3YTViZGY0MmYxNTIxNzhkMTU0YmIyMjM3ZDlmZDM1NzcyYTdmMzJiY2ZkMzNiZWViOGVkYzQ4MjBiYSJ9fX0="
+        } else {
+            "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTZhMDExZTYyNmI3MWNlYWQ5ODQxOTM1MTFlODJlNjVjMTM1OTU2NWYwYTJmY2QxMTg0ODcyZjg5ZDkwOGM2NSJ9fX0="
+        }
+
+        return CustomGui.createPlayerHeadButton(
+            itemName.replace(" ", ""),
+            Text.literal(itemName).styled { it.withColor(if (isMinSize) Formatting.GREEN else Formatting.BLUE).withBold(true) },
+            lore.map { Text.literal(it) },
+            textureValue
+        )
+    }
+
+    private fun createCurrentValueHead(title: String, label: String, value: Float): ItemStack {
+        return CustomGui.createPlayerHeadButton(
+            title.replace(" ", ""),
+            Text.literal(title).styled { it.withColor(Formatting.WHITE).withBold(true) },
+            listOf(Text.literal("§a$label: §f%.2f".format(value))),
+            "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYjZkZDg5MTlmZThmNzUwN2I0NjQxYmYzYWE3MmIwNTZlMDg1N2NjMjAyYThlNWViNjZjOWMyMWFhNzNjMzg3NiJ9fX0="
+        )
+    }
+
     private fun createToggleCustomSizeButton(allowCustomSize: Boolean): ItemStack {
         val textureValue = if (allowCustomSize) {
             "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTI1YjhlZWQ1YzU2NWJkNDQwZWM0N2M3OWMyMGQ1Y2YzNzAxNjJiMWQ5YjVkZDMxMDBlZDYyODNmZTAxZDZlIn19fQ=="
@@ -200,42 +206,13 @@ object SizeSettingsGui {
         return CustomGui.createPlayerHeadButton(
             "ToggleCustomSizes",
             Text.literal("Allow Custom Sizes: ${if (allowCustomSize) "ON" else "OFF"}").styled {
-                it.withColor(if (allowCustomSize) Formatting.GREEN else Formatting.RED)
-                    .withBold(true)
+                it.withColor(if (allowCustomSize) Formatting.GREEN else Formatting.RED).withBold(true)
             },
-            listOf(
-                Text.literal("§eClick to toggle")
-            ),
+            listOf(Text.literal("§eClick to toggle")),
             textureValue
         )
     }
 
-    /**
-     * Creates a size adjuster button.
-     */
-    private fun createSizeAdjusterButton(
-        button: SizeButton,
-        currentSize: Float,
-        allowCustomSize: Boolean
-    ): ItemStack {
-        val displayName = "${button.label}: %.1f".format(currentSize)
-
-        return CustomGui.createPlayerHeadButton(
-            button.label.replace(" ", "") + "Head",
-            Text.literal(displayName).styled {
-                it.withColor(button.formatting).withBold(true)
-            },
-            listOf(
-                Text.literal("§7Left-click to decrease by 0.1"),
-                Text.literal("§7Right-click to increase by 0.1")
-            ),
-            button.textureValue
-        )
-    }
-
-    /**
-     * Creates a Back button.
-     */
     private fun createBackButton(): ItemStack {
         return CustomGui.createPlayerHeadButton(
             "BackButton",
@@ -245,9 +222,6 @@ object SizeSettingsGui {
         )
     }
 
-    /**
-     * Creates a filler pane.
-     */
     private fun createFillerPane(): ItemStack {
         return ItemStack(Items.GRAY_STAINED_GLASS_PANE).apply {
             setCustomName(Text.literal(" "))
@@ -255,9 +229,6 @@ object SizeSettingsGui {
         }
     }
 
-    /**
-     * Toggles the allow custom size setting.
-     */
     private fun toggleAllowCustomSize(
         spawnerPos: BlockPos,
         pokemonName: String,
@@ -277,18 +248,12 @@ object SizeSettingsGui {
             return
         }
 
-        // Update the GUI with the new setting
         CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName ?: "Standard", additionalAspects)?.let { entry ->
             val toggleButton = createToggleCustomSizeButton(entry.sizeSettings.allowCustomSize)
             updateSingleItem(player, Slots.TOGGLE_CUSTOM_SIZE, toggleButton)
 
-            // Notify the player
             val status = if (entry.sizeSettings.allowCustomSize) "enabled" else "disabled"
-            player.sendMessage(
-                Text.literal("Custom size settings $status for ${entry.pokemonName}."),
-                false
-            )
-
+            player.sendMessage(Text.literal("Custom size settings $status for ${entry.pokemonName}."), false)
             logDebug(
                 "Toggled allowCustomSize to $status for ${entry.pokemonName} (${entry.formName ?: "Standard"}) with aspects ${additionalAspects.joinToString(", ")} at spawner $spawnerPos.",
                 "cobblespawners"
@@ -296,16 +261,13 @@ object SizeSettingsGui {
         }
     }
 
-    /**
-     * Adjusts the size based on the given parameters.
-     */
     private fun adjustSize(
         spawnerPos: BlockPos,
         pokemonName: String,
         formName: String?,
         player: ServerPlayerEntity,
         isMinSize: Boolean,
-        increase: Boolean,
+        delta: Float,
         additionalAspects: Set<String> = emptySet()
     ) {
         CobbleSpawnersConfig.updatePokemonSpawnEntry(
@@ -315,50 +277,38 @@ object SizeSettingsGui {
             additionalAspects
         ) { entry ->
             val currentSize = if (isMinSize) entry.sizeSettings.minSize else entry.sizeSettings.maxSize
-            val newSize = if (increase) currentSize + SIZE_ADJUSTMENT_VALUE else currentSize - SIZE_ADJUSTMENT_VALUE
-
-            // Determine bounds
-            val minBound = MIN_SIZE_BOUND
+            val newSize = currentSize + delta
+            val minBound = if (isMinSize) MIN_SIZE_BOUND else entry.sizeSettings.minSize
             val maxBound = if (isMinSize) entry.sizeSettings.maxSize else MAX_SIZE_BOUND
-
             val adjustedSize = newSize.coerceIn(minBound, maxBound)
-            val roundedSize = roundToOneDecimal(adjustedSize)
-
-            // Only update if there was a change after rounding
-            if (roundedSize != currentSize) {
-                if (isMinSize) {
-                    entry.sizeSettings.minSize = roundedSize
-                } else {
-                    entry.sizeSettings.maxSize = roundedSize
-                }
+            val roundedSize = roundToTwoDecimals(adjustedSize)
+            if (isMinSize) {
+                entry.sizeSettings.minSize = roundedSize
+            } else {
+                entry.sizeSettings.maxSize = roundedSize
             }
         } ?: run {
             player.sendMessage(Text.literal("Failed to adjust size."), false)
             return
         }
 
-        // After updating, get the entry with additionalAspects for correct display
         CobbleSpawnersConfig.getPokemonSpawnEntry(spawnerPos, pokemonName, formName ?: "Standard", additionalAspects)?.let { entry ->
             val sizeSettings = entry.sizeSettings
-
-            // Get button configuration
-            val buttonSlot = if (isMinSize) Slots.MIN_SIZE else Slots.MAX_SIZE
-            val button = sizeButtonsBySlot[buttonSlot] ?: return@let
-
-            // Get current size value
+            val displaySlot = if (isMinSize) Slots.MIN_SIZE_DISPLAY else Slots.MAX_SIZE_DISPLAY
             val currentSize = if (isMinSize) sizeSettings.minSize else sizeSettings.maxSize
+            val displayItem = createCurrentValueHead("Current ${if (isMinSize) "Min" else "Max"} Size", "${if (isMinSize) "Min" else "Max"} Size", currentSize)
+            updateSingleItem(player, displaySlot, displayItem)
 
-            // Update the button
-            val updatedButton = createSizeAdjusterButton(button, currentSize, sizeSettings.allowCustomSize)
-            updateSingleItem(player, buttonSlot, updatedButton)
+            val buttonsToUpdate = if (isMinSize) minSizeButtons else maxSizeButtons
+            buttonsToUpdate.forEach { button ->
+                val buttonItem = createSizeAdjustmentButton(button, sizeSettings, entry)
+                updateSingleItem(player, button.slotIndex, buttonItem)
+            }
 
-            // Log the adjustment
             logger.info(
                 "Adjusted ${if (isMinSize) "min" else "max"} size for ${entry.pokemonName} (${entry.formName ?: "Standard"}) " +
                         "with aspects ${additionalAspects.joinToString(", ")} at spawner $spawnerPos to $currentSize."
             )
-
-            // Notify the player
             player.sendMessage(
                 Text.literal("Set ${if (isMinSize) "minimum" else "maximum"} size to $currentSize for ${entry.pokemonName}."),
                 false
@@ -366,9 +316,6 @@ object SizeSettingsGui {
         }
     }
 
-    /**
-     * Updates a single slot in the GUI
-     */
     private fun updateSingleItem(player: ServerPlayerEntity, slot: Int, item: ItemStack) {
         val screenHandler = player.currentScreenHandler
         if (slot < screenHandler.slots.size) {
@@ -377,10 +324,7 @@ object SizeSettingsGui {
         }
     }
 
-    /**
-     * Rounds a Float to one decimal place.
-     */
-    private fun roundToOneDecimal(value: Float): Float {
-        return (value * 10).roundToInt() / 10f
+    private fun roundToTwoDecimals(value: Float): Float {
+        return (value * 100).roundToInt() / 100f
     }
 }
