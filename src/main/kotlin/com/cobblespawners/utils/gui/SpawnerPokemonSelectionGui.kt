@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap
 enum class SortMethod {
     ALPHABETICAL,   // Sort by name alphabetically
     TYPE,           // Sort by Pokémon type
-    SELECTED,       // Show selected Pokémon first
+    SELECTED,       // Show only selected Pokémon
     SEARCH          // Show Pokémon matching search term
 }
 
@@ -42,9 +42,20 @@ object SpawnerPokemonSelectionGui {
     private var cachedVariants: List<SpeciesFormVariant>? = null
     private var cachedSortMethod: SortMethod? = null
     private var cachedSearchTerm: String? = null
+    private var cachedConfigKey: String? = null  // New cache key for config values
 
     // Cache for additional aspect sets per species name (keyed in lowercase)
     private val additionalAspectsCache = mutableMapOf<String, List<Set<String>>>()
+
+    // Cache for full GUI layouts based on state. Now includes a configKey.
+    private data class GuiLayoutKey(
+        val page: Int,
+        val sortMethod: SortMethod,
+        val searchTerm: String,
+        val selectedPokemonKey: String,
+        val configKey: String
+    )
+    private val guiLayoutCache = ConcurrentHashMap<GuiLayoutKey, List<ItemStack>>()
 
     // UI constants
     private object Slots {
@@ -134,9 +145,9 @@ object SpawnerPokemonSelectionGui {
                         searchTerm = ""
                     }
 
-                    // Invalidate cache when sort method changes (unless in SELECTED mode)
+                    // Invalidate caches when sort method changes (unless in SELECTED mode)
                     if (sortMethod != SortMethod.SELECTED) {
-                        cachedVariants = null
+                        invalidateCaches()
                     }
 
                     CobbleSpawnersConfig.saveSpawnerData()
@@ -162,7 +173,7 @@ object SpawnerPokemonSelectionGui {
                 else -> {}
             }
 
-            Slots.SPAWNER_SETTINGS -> SpawnerSettingsGui.openSpawnerSettingsGui(player, spawnerPos)
+            Slots.SPAWNER_SETTINGS -> GlobalSettingsGui.openGlobalSettingsGui(player, spawnerPos)
             Slots.NEXT_PAGE -> {
                 val totalVariants = getTotalVariantsCount(selectedPokemon)
                 if ((currentPage + 1) * 45 < totalVariants) {
@@ -283,7 +294,15 @@ object SpawnerPokemonSelectionGui {
         playerComputations[player] = future
     }
 
+    // Modified generateFullGuiLayout to use caching.
     private fun generateFullGuiLayout(selectedPokemon: List<PokemonSpawnEntry>, page: Int): List<ItemStack> {
+        val selectedKey = selectedPokemon.map { it.toKey() }.sorted().joinToString(",")
+        // Include config values in the key.
+        val globalConfig = CobbleSpawnersConfig.config.globalConfig
+        val configKey = "${globalConfig.showUnimplementedPokemonInGui}_${globalConfig.showFormsInGui}_${globalConfig.showAspectsInGui}"
+        val key = GuiLayoutKey(page, sortMethod, searchTerm, selectedKey, configKey)
+        guiLayoutCache[key]?.let { return it }
+
         val layout = generatePokemonItemsForGui(selectedPokemon, page).toMutableList()
         val totalVariants = getTotalVariantsCount(selectedPokemon)
 
@@ -311,14 +330,16 @@ object SpawnerPokemonSelectionGui {
         }
         layout[Slots.SORT_METHOD] = createButton(sortMethodText, Formatting.AQUA, sortMethodLore, Textures.SORT_METHOD)
 
+        // Global Settings button
         layout[Slots.SPAWNER_MENU] = createButton(
             "Global Settings", Formatting.GREEN,
-            listOf("§eLeft-click§r to open Global Settings", "§eRight-click§r to open Spawner List menu"),
+            listOf("Left-click to open Global Settings", "Right-click to open Spawner List menu"),
             Textures.SPAWNER_MENU
         )
 
+        // Spawner Settings button
         layout[Slots.SPAWNER_SETTINGS] = createButton(
-            "Edit This Spawner's Settings", Formatting.RED,
+            "Edit This Spawner's Settings", Formatting.BLUE,
             "Click to edit the current spawner’s settings", Textures.SPAWNER_SETTINGS
         )
 
@@ -328,7 +349,15 @@ object SpawnerPokemonSelectionGui {
 
         listOf(46, 47, 51, 52).forEach { layout[it] = createFillerPane() }
 
+        // Save the computed layout in the cache.
+        guiLayoutCache[key] = layout
         return layout
+    }
+
+    // Helper function to clear caches when parameters change.
+    private fun invalidateCaches() {
+        cachedVariants = null
+        guiLayoutCache.clear()
     }
 
     // ### Pokémon Items Generation
@@ -391,11 +420,12 @@ object SpawnerPokemonSelectionGui {
 
         // Build lore info
         val formLore = if (showFormsInGui || form.name != "Standard") "§2Form: §a$displayFormName" else ""
-        val aspectsLore = if (additionalAspects.isNotEmpty())
+        val aspectsLore = if (CobbleSpawnersConfig.config.globalConfig.showAspectsInGui && additionalAspects.isNotEmpty())
             "§2Aspects: §a${additionalAspects.joinToString(", ") { it.replaceFirstChar { ch -> ch.uppercase() } }}"
-        else ""
-
-        // Add stats to lore
+        else {
+            // If aspects are disabled but shiny is present, still show "Shiny"
+            if (additionalAspects.any { it.equals("shiny", ignoreCase = true) }) "§2Aspects: §aShiny" else ""
+        }
         val pokemonLore = listOf(
             "§2Type: §a${species.primaryType.name}",
             species.secondaryType?.let { "§2Secondary Type: §a${it.name}" } ?: "",
@@ -432,10 +462,11 @@ object SpawnerPokemonSelectionGui {
         val displayFormName = if (form.name == "Standard") "Normal" else form.name
 
         val formLore = if (showFormsInGui || form.name != "Standard") "§aForm: §f$displayFormName" else ""
-        val aspectsLore = if (additionalAspects.isNotEmpty())
+        val aspectsLore = if (CobbleSpawnersConfig.config.globalConfig.showAspectsInGui && additionalAspects.isNotEmpty())
             "§aAspects: §f${additionalAspects.joinToString(", ") { it.replaceFirstChar { it.uppercase() } }}"
-        else ""
-
+        else {
+            if (additionalAspects.any { it.equals("shiny", ignoreCase = true) }) "§aAspects: §fShiny" else ""
+        }
         val pokemonLore = listOf(
             "§aType: §f${species.primaryType.name}",
             species.secondaryType?.let { "§aSecondary Type: §f${it.name}" } ?: "",
@@ -461,7 +492,7 @@ object SpawnerPokemonSelectionGui {
     ): String {
         val propertiesStringBuilder = StringBuilder(species.showdownId())
 
-        // Add form information
+        // Add form information if enabled
         if (showFormsInGui && form.name != "Standard") {
             if (form.aspects.isNotEmpty()) {
                 for (aspect in form.aspects) {
@@ -473,13 +504,12 @@ object SpawnerPokemonSelectionGui {
             }
         }
 
-        // Add additional aspects using the aspect=value format
+        // Always add additional aspects for properties,
+        // even if they are not shown in the GUI.
         for (aspect in additionalAspects) {
-            // Check if the aspect already contains "="
             if (aspect.contains("=")) {
                 propertiesStringBuilder.append(" ").append(aspect.lowercase())
             } else {
-                // Otherwise use the aspect=value format
                 propertiesStringBuilder.append(" aspect=").append(aspect.lowercase())
             }
         }
@@ -499,13 +529,19 @@ object SpawnerPokemonSelectionGui {
         if (showFormsInGui || form.name != "Standard") {
             formAndAspects.add(displayFormName)
         }
-
-        formAndAspects.addAll(additionalAspects.map { it.replaceFirstChar { it.uppercase() } })
+        // When aspects are enabled, add them normally.
+        // Otherwise, if "shiny" is present, always add "Shiny".
+        if (CobbleSpawnersConfig.config.globalConfig.showAspectsInGui) {
+            formAndAspects.addAll(additionalAspects.map { it.replaceFirstChar { it.uppercase() } })
+        } else {
+            if (additionalAspects.any { it.equals("shiny", ignoreCase = true) }) {
+                formAndAspects.add("Shiny")
+            }
+        }
 
         val formAndAspectsStr = if (formAndAspects.isNotEmpty()) {
             " (" + formAndAspects.joinToString(", ") + ")"
         } else ""
-
         return species.name + formAndAspectsStr
     }
 
@@ -513,24 +549,27 @@ object SpawnerPokemonSelectionGui {
 
     // Computes the full list of variants (with caching unless sort mode is SELECTED)
     private fun getAllVariants(selectedPokemon: List<PokemonSpawnEntry>): List<SpeciesFormVariant> {
-        val showUnimplemented = CobbleSpawnersConfig.config.globalConfig.showUnimplementedPokemonInGui
-        val showFormsInGui = CobbleSpawnersConfig.config.globalConfig.showFormsInGui
+        val globalConfig = CobbleSpawnersConfig.config.globalConfig
+        val showUnimplemented = globalConfig.showUnimplementedPokemonInGui
+        val showFormsInGui = globalConfig.showFormsInGui
+
+        // Create a config key from the three config values
+        val configKey = "${showUnimplemented}_${showFormsInGui}_${globalConfig.showAspectsInGui}"
 
         if (sortMethod != SortMethod.SELECTED) {
-            if (cachedVariants != null && cachedSortMethod == sortMethod && cachedSearchTerm == searchTerm) {
+            if (cachedVariants != null &&
+                cachedSortMethod == sortMethod &&
+                cachedSearchTerm == searchTerm &&
+                cachedConfigKey == configKey
+            ) {
                 return cachedVariants!!
             }
         }
 
-        val sortedSpecies = when (sortMethod) {
+        // Generate variants for all applicable species
+        val speciesList = when (sortMethod) {
             SortMethod.ALPHABETICAL -> PokemonSpecies.species.filter { showUnimplemented || it.implemented }.sortedBy { it.name }
             SortMethod.TYPE -> PokemonSpecies.species.filter { showUnimplemented || it.implemented }.sortedBy { it.primaryType.name }
-            SortMethod.SELECTED -> {
-                PokemonSpecies.species.filter { showUnimplemented || it.implemented }.sortedWith(compareBy(
-                    { !selectedPokemon.any { p -> p.pokemonName.equals(it.showdownId(), ignoreCase = true) } },
-                    { it.name }
-                ))
-            }
             SortMethod.SEARCH -> {
                 if (searchTerm.isBlank()) {
                     PokemonSpecies.species.filter { showUnimplemented || it.implemented }.sortedBy { it.name }
@@ -541,26 +580,41 @@ object SpawnerPokemonSelectionGui {
                     }.sortedBy { it.name }
                 }
             }
+            // For SELECTED, still generate all species then filter variants later.
+            SortMethod.SELECTED -> PokemonSpecies.species.filter { showUnimplemented || it.implemented }.sortedBy { it.name }
         }
 
         val variantsList = mutableListOf<SpeciesFormVariant>()
-        for (species in sortedSpecies) {
+        for (species in speciesList) {
             val forms = if (showFormsInGui && species.forms.isNotEmpty()) species.forms else listOf(species.standardForm)
-            val additionalAspectSets = getAdditionalAspectSets(species)
+            val additionalAspectSets = if (CobbleSpawnersConfig.config.globalConfig.showAspectsInGui) {
+                getAdditionalAspectSets(species)
+            } else {
+                emptyList()
+            }
             val variants = forms.flatMap { form ->
-                listOf(
+                val baseVariants = listOf(
                     SpeciesFormVariant(species, form, emptySet()),
                     SpeciesFormVariant(species, form, setOf("shiny"))
-                ) + additionalAspectSets.map { SpeciesFormVariant(species, form, it) }
+                )
+                if (CobbleSpawnersConfig.config.globalConfig.showAspectsInGui) {
+                    baseVariants + additionalAspectSets.map { SpeciesFormVariant(species, form, it) }
+                } else {
+                    baseVariants
+                }
             }.distinctBy { it.toKey() }
             variantsList.addAll(variants)
         }
 
-        if (sortMethod != SortMethod.SELECTED) {
-            cachedVariants = variantsList
-            cachedSortMethod = sortMethod
-            cachedSearchTerm = searchTerm
+        // When sorting by SELECTED, filter out only those variants that are selected.
+        if (sortMethod == SortMethod.SELECTED) {
+            return variantsList.filter { variant -> isPokemonSelected(variant, selectedPokemon) }
         }
+
+        cachedVariants = variantsList
+        cachedSortMethod = sortMethod
+        cachedSearchTerm = searchTerm
+        cachedConfigKey = configKey
         return variantsList
     }
 
@@ -616,7 +670,6 @@ object SpawnerPokemonSelectionGui {
                 // Check for specific hardcoded aspects (for backward compatibility)
                 when (species.name.lowercase()) {
                     "forretress" -> speciesSpecificAspects.add("shulker")
-                    // Add other special cases as needed
                 }
 
                 // Add individual aspect sets
@@ -633,7 +686,6 @@ object SpawnerPokemonSelectionGui {
                 aspectSets.distinctBy { it.toSortedSet().joinToString(",") }
             } catch (e: Exception) {
                 logger.error("Error in getAdditionalAspectSets for ${species.name}: ${e.message}")
-                // Fallback with hardcoded values
                 when (species.name.lowercase()) {
                     else -> listOf(setOf("shiny"))
                 }

@@ -17,7 +17,8 @@ data class GlobalConfig(
     var debugEnabled: Boolean = false,
     var cullSpawnerPokemonOnServerStop: Boolean = true,
     var showUnimplementedPokemonInGui: Boolean = false,
-    var showFormsInGui: Boolean = false
+    var showFormsInGui: Boolean = true,
+    var showAspectsInGui: Boolean = true
 )
 
 data class CaptureSettings(
