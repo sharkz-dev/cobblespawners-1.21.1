@@ -30,6 +30,7 @@ object SpawnerSettingsGui {
             return
         }
 
+        val guiTitle = "Edit Settings for ${spawnerData.spawnerName}"
         val layout = generateSpawnerSettingsLayout(spawnerData)
 
         val onInteract: (InteractionContext) -> Unit = { context ->
@@ -39,13 +40,12 @@ object SpawnerSettingsGui {
                 23 -> adjustSpawnerSetting(player, spawnerPos, "Spawn Height", spawnerData.spawnRadius.height, context.clickType)
                 29 -> adjustSpawnerSetting(player, spawnerPos, "Spawn Limit", spawnerData.spawnLimit, context.clickType)
                 31 -> toggleSpawnerVisibility(context, player, spawnerPos, spawnerData.visible)
-                39 -> adjustSpawnerSetting(player, spawnerPos, "Spawn Amount Per Spawn", spawnerData.spawnAmountPerSpawn, context.clickType) // New Button
+                39 -> adjustSpawnerSetting(player, spawnerPos, "Spawn Amount Per Spawn", spawnerData.spawnAmountPerSpawn, context.clickType)
                 49 -> {
-                    // Close the current GUI and reopen the Spawner list GUI
                     CustomGui.closeGui(player)
-                    SpawnerPokemonSelectionGui.openSpawnerGui(player, spawnerPos, SpawnerPokemonSelectionGui.playerPages[player] ?: 0) // Reopen the Spawner list GUI
+                    SpawnerPokemonSelectionGui.openSpawnerGui(player, spawnerPos, SpawnerPokemonSelectionGui.playerPages[player] ?: 0)
                 }
-                else -> player.sendMessage(Text.literal("Unknown setting clicked at slot ${context.slotIndex}"), false)
+                // Ignore clicks on other slots (glass panes)
             }
         }
 
@@ -63,7 +63,7 @@ object SpawnerSettingsGui {
 
         CustomGui.openGui(
             player,
-            "Edit Spawner Settings",
+            guiTitle,
             layout,
             onInteract,
             onClose
@@ -133,7 +133,6 @@ object SpawnerSettingsGui {
             ),
             "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvODVmZmI1MjMzMmNiZmNiNWJlNTM1NTNkNjdjNzI2NDNiYTJiYjUxN2Y3ZTg5ZGVkNTNkNGE5MmIwMGNlYTczZSJ9fX0="
         )
-
 
         // Row 5: New Spawn Amount Per Spawn button
         layout[39] = CustomGui.createPlayerHeadButton(
@@ -205,7 +204,7 @@ object SpawnerSettingsGui {
                         spawnerData.spawnLimit + 1
                     }
                 }
-                "Spawn Amount Per Spawn" -> { // New Setting
+                "Spawn Amount Per Spawn" -> {
                     spawnerData.spawnAmountPerSpawn = if (clickType == ClickType.LEFT) {
                         (spawnerData.spawnAmountPerSpawn - 1).coerceAtLeast(1)
                     } else {
@@ -216,19 +215,15 @@ object SpawnerSettingsGui {
         }
         CobbleSpawnersConfig.saveSpawnerData()
         player.sendMessage(Text.literal("$setting adjusted"), false)
-        refreshSpawnerGui(player, spawnerPos) // Refresh the GUI to reflect the changes
+        refreshSpawnerGui(player, spawnerPos)
     }
 
     private fun toggleSpawnerVisibility(context: InteractionContext, player: ServerPlayerEntity, spawnerPos: BlockPos, visible: Boolean) {
-        // Call the CommandRegistrar's toggleSpawnerVisibility function
         val server = player.server ?: return
-
         val success = CommandRegistrarUtil.toggleSpawnerVisibility(server, spawnerPos)
         if (success) {
-            // Update the local spawnerData's visibility
             val spawnerData = CobbleSpawnersConfig.getSpawner(spawnerPos)
             if (spawnerData != null) {
-                // Update the GUI item to reflect the new status
                 updateGuiItem(context, player, "Spawner Visibility", spawnerData.visible, if (spawnerData.visible) Formatting.GREEN else Formatting.RED)
                 player.sendMessage(Text.literal("Spawner visibility has been toggled."), false)
             }
@@ -237,22 +232,15 @@ object SpawnerSettingsGui {
         }
     }
 
-
     private fun updateGuiItem(context: InteractionContext, player: ServerPlayerEntity, settingName: String, newValue: Boolean, color: Formatting) {
         val itemStack = context.clickedStack
-
-        // Set the custom name using DataComponents instead of NBT
         itemStack.setCustomName(
             Text.literal(settingName).styled {
                 it.withColor(color).withBold(false).withItalic(false)
             }
         )
-
-        // Retrieve current lore from DataComponents
         val oldLoreComponent = itemStack.getOrDefault(DataComponentTypes.LORE, LoreComponent(emptyList()))
         val oldLore = oldLoreComponent.lines.toMutableList()
-
-        // Attempt to find and update the "Status:" line
         var updatedStatus = false
         for (i in oldLore.indices) {
             val line = oldLore[i]
@@ -264,8 +252,6 @@ object SpawnerSettingsGui {
                 break
             }
         }
-
-        // If no "Status:" line was found, add a new line
         if (!updatedStatus) {
             oldLore.add(
                 Text.literal("Status: ${if (newValue) "ON" else "OFF"}").styled { s ->
@@ -273,29 +259,21 @@ object SpawnerSettingsGui {
                 }
             )
         }
-
-        // Update the lore using DataComponents
         itemStack.set(DataComponentTypes.LORE, LoreComponent(oldLore))
-
-        // Update the item in the player's screen
         player.currentScreenHandler.slots[context.slotIndex].stack = itemStack
         player.currentScreenHandler.sendContentUpdates()
     }
-
 
     private fun refreshSpawnerGui(player: ServerPlayerEntity, spawnerPos: BlockPos) {
         val spawnerData = CobbleSpawnersConfig.getSpawner(spawnerPos)
         if (spawnerData != null) {
             val layout = generateSpawnerSettingsLayout(spawnerData)
-
             val screenHandler = player.currentScreenHandler
             layout.forEachIndexed { index, itemStack ->
                 if (index < screenHandler.slots.size) {
                     screenHandler.slots[index].stack = itemStack
                 }
             }
-
-            // Update the screen
             screenHandler.sendContentUpdates()
         }
     }

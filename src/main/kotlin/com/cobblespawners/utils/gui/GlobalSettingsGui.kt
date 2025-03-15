@@ -91,10 +91,7 @@ object GlobalSettingsGui {
                             player.sendMessage(Text.literal("Could not return to previous screen. Please try again."), false)
                         }
                     }
-                    else -> {
-                        logger.warn("Unknown setting clicked at slot ${context.slotIndex}")
-                        player.sendMessage(Text.literal("Unknown setting clicked at slot ${context.slotIndex}"), false)
-                    }
+                    // No else clause here; clicks on unhandled slots (e.g., glass panes) are ignored
                 }
             } catch (e: Exception) {
                 logger.error("Error handling GUI interaction at slot ${context.slotIndex}: ${e.message}", e)

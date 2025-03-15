@@ -173,7 +173,7 @@ object SpawnerPokemonSelectionGui {
                 else -> {}
             }
 
-            Slots.SPAWNER_SETTINGS -> GlobalSettingsGui.openGlobalSettingsGui(player, spawnerPos)
+            Slots.SPAWNER_SETTINGS -> SpawnerSettingsGui.openSpawnerSettingsGui(player, spawnerPos)
             Slots.NEXT_PAGE -> {
                 val totalVariants = getTotalVariantsCount(selectedPokemon)
                 if ((currentPage + 1) * 45 < totalVariants) {
@@ -665,11 +665,6 @@ object SpawnerPokemonSelectionGui {
                     } catch (e: Exception) {
                         logger.debug("Error accessing aspects from provider: ${e.message}")
                     }
-                }
-
-                // Check for specific hardcoded aspects (for backward compatibility)
-                when (species.name.lowercase()) {
-                    "forretress" -> speciesSpecificAspects.add("shulker")
                 }
 
                 // Add individual aspect sets
