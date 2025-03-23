@@ -9,7 +9,9 @@ import com.everlastingutils.gui.FullyModularAnvilScreenHandler
 import com.everlastingutils.gui.InteractionContext
 import com.everlastingutils.gui.setCustomName
 import com.cobblespawners.utils.*
+import com.cobblespawners.utils.gui.PokemonEditSubGui
 import com.cobblespawners.utils.gui.SpawnerPokemonSelectionGui.spawnerGuisOpen
+
 import net.minecraft.inventory.Inventory
 import net.minecraft.item.ItemStack
 import net.minecraft.item.Items
@@ -18,6 +20,7 @@ import net.minecraft.text.Text
 import net.minecraft.util.Formatting
 import net.minecraft.util.math.BlockPos
 import org.slf4j.LoggerFactory
+import java.util.*
 import kotlin.math.ceil
 import kotlin.math.min
 
@@ -223,7 +226,8 @@ object MovesSettingsGui {
             }
             BACK_BUTTON_SLOT -> {
                 CustomGui.closeGui(player)
-                SpawnSettingsGui.openSpawnShinyEditorGui(player, spawnerPos, pokemonName, formName, additionalAspects)
+                player.sendMessage(Text.literal("Returning to Edit Pokémon menu."), false)
+                PokemonEditSubGui.openPokemonEditSubGui(player, spawnerPos, pokemonName, formName, additionalAspects)
             }
             ADD_CUSTOM_MOVE_SLOT -> {
                 CustomGui.closeGui(player)
@@ -288,7 +292,11 @@ object MovesSettingsGui {
                                             movesList[idx] = LeveledMove(move.level, move.moveId, !move.forced)
                                             entry.moves = MovesSettings(entry.moves!!.allowCustomInitialMoves, movesList)
                                             player.sendMessage(
-                                                Text.literal("Set ${moveInfo.moveId.capitalize()} (Lv. ${moveInfo.level}) to ${if (!move.forced) "forced" else "not forced"} for $pokemonName."),
+                                                Text.literal("Set ${moveInfo.moveId.replaceFirstChar {
+                                                    if (it.isLowerCase()) it.titlecase(
+                                                        Locale.getDefault()
+                                                    ) else it.toString()
+                                                }} (Lv. ${moveInfo.level}) to ${if (!move.forced) "forced" else "not forced"} for $pokemonName."),
                                                 false
                                             )
                                         }
@@ -307,7 +315,11 @@ object MovesSettingsGui {
                                             movesList.removeAt(idx)
                                             entry.moves = MovesSettings(entry.moves!!.allowCustomInitialMoves, movesList)
                                             player.sendMessage(
-                                                Text.literal("Removed ${moveInfo.moveId.capitalize()} (Lv. ${moveInfo.level}) from ${pokemonName}'s moveset."),
+                                                Text.literal("Removed ${moveInfo.moveId.replaceFirstChar {
+                                                    if (it.isLowerCase()) it.titlecase(
+                                                        Locale.getDefault()
+                                                    ) else it.toString()
+                                                }} (Lv. ${moveInfo.level}) from ${pokemonName}'s moveset."),
                                                 false
                                             )
                                         }
@@ -326,7 +338,11 @@ object MovesSettingsGui {
                                         movesList.add(LeveledMove(moveInfo.level, moveInfo.moveId, false))
                                         entry.moves = MovesSettings(entry.moves!!.allowCustomInitialMoves, movesList)
                                         player.sendMessage(
-                                            Text.literal("Added ${moveInfo.moveId.capitalize()} (Lv. ${moveInfo.level}) to ${pokemonName}'s moveset."),
+                                            Text.literal("Added ${moveInfo.moveId.replaceFirstChar {
+                                                if (it.isLowerCase()) it.titlecase(
+                                                    Locale.getDefault()
+                                                ) else it.toString()
+                                            }} (Lv. ${moveInfo.level}) to ${pokemonName}'s moveset."),
                                             false
                                         )
                                     }
@@ -407,14 +423,22 @@ object MovesSettingsGui {
                         if (!movesList.any { it.moveId.equals(formattedMoveName, ignoreCase = true) }) {
                             movesList.add(LeveledMove(1, formattedMoveName, false))
                             entry.moves = MovesSettings(entry.moves!!.allowCustomInitialMoves, movesList)
-                            player.sendMessage(Text.literal("Added custom move ${formattedMoveName.capitalize()} (Lv. 1) to ${pokemonName}'s moveset."), false)
+                            player.sendMessage(Text.literal("Added custom move ${formattedMoveName.replaceFirstChar {
+                                if (it.isLowerCase()) it.titlecase(
+                                    Locale.getDefault()
+                                ) else it.toString()
+                            }} (Lv. 1) to ${pokemonName}'s moveset."), false)
                             // Close the anvil GUI and reopen the Moves Settings GUI
                             player.closeHandledScreen()
                             player.server.execute {
                                 openMovesSettingsGui(player, spawnerPos, pokemonName, formName, additionalAspects, playerPages[player] ?: 0)
                             }
                         } else {
-                            player.sendMessage(Text.literal("§c${formattedMoveName.capitalize()} is already in the moveset."), false)
+                            player.sendMessage(Text.literal("§c${formattedMoveName.replaceFirstChar {
+                                if (it.isLowerCase()) it.titlecase(
+                                    Locale.getDefault()
+                                ) else it.toString()
+                            }} is already in the moveset."), false)
                         }
                     }
                 }
@@ -450,7 +474,11 @@ object MovesSettingsGui {
      */
     private fun createSelectedMoveButton(moveInfo: LeveledMove): ItemStack {
         val (level, moveId, forced) = moveInfo
-        val displayName = moveId.replace("_", " ").split(" ").joinToString(" ") { it.capitalize() }
+        val displayName = moveId.replace("_", " ").split(" ").joinToString(" ") { it.replaceFirstChar {
+            if (it.isLowerCase()) it.titlecase(
+                Locale.getDefault()
+            ) else it.toString()
+        } }
 
         // Check if this is a custom move (not in the default list for this Pokémon)
         val isCustomMove = !isDefaultMove(moveInfo)
@@ -492,7 +520,11 @@ object MovesSettingsGui {
      */
     private fun createAvailableMoveButton(moveInfo: LeveledMove): ItemStack {
         val (level, moveId, _) = moveInfo
-        val displayName = moveId.replace("_", " ").split(" ").joinToString(" ") { it.capitalize() }
+        val displayName = moveId.replace("_", " ").split(" ").joinToString(" ") { it.replaceFirstChar {
+            if (it.isLowerCase()) it.titlecase(
+                Locale.getDefault()
+            ) else it.toString()
+        } }
         val item = ItemStack(Items.BLUE_STAINED_GLASS_PANE)
         item.setCustomName(Text.literal("§9$displayName"))
         val lore = listOf(

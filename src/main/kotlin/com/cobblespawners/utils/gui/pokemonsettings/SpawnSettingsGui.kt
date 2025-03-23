@@ -162,12 +162,6 @@ object SpawnSettingsGui {
             return
         }
 
-        // Handle Moves Editor Button
-        if (slotIndex == DisplaySlots.MOVES_EDITOR_BUTTON) {
-            CustomGui.closeGui(player)
-            MovesSettingsGui.openMovesSettingsGui(player, spawnerPos, pokemonName, formName, additionalAspects)
-            return
-        }
 
         // Handle Back Button
         if (slotIndex == DisplaySlots.BACK_BUTTON) {
@@ -213,8 +207,6 @@ object SpawnSettingsGui {
         // Add Toggle Spawn Chance Type button (head item)
         layout[DisplaySlots.SPAWN_CHANCE_TYPE] = createToggleSpawnChanceTypeHead(selectedEntry)
 
-        // Add Moves Editor Button
-        layout[DisplaySlots.MOVES_EDITOR_BUTTON] = createMovesEditorHead(selectedEntry)
 
         // Add Back Button as a head item
         layout[DisplaySlots.BACK_BUTTON] = createBackHead()
@@ -238,26 +230,6 @@ object SpawnSettingsGui {
         return layout
     }
 
-    // In SpawnSettingsGui.kt, modify createMovesEditorHead function
-    private fun createMovesEditorHead(selectedEntry: PokemonSpawnEntry): ItemStack {
-        // Handle the case when moves is null by providing a default MovesSettings
-        val moves = selectedEntry.moves ?: MovesSettings()
-        val movesCount = moves.selectedMoves.size
-        val enabledText = if (moves.allowCustomInitialMoves) "§aEnabled" else "§cDisabled"
-
-        return CustomGui.createPlayerHeadButton(
-            "MovesEditorButton",
-            Text.literal("Edit Initial Selected Moves").styled { it.withColor(Formatting.WHITE).withBold(true) },
-            listOf(
-                Text.literal("§eClick to open moves editor"),
-                Text.literal("§7Configure the moves that are available on spawn for this Pokémon"),
-                Text.literal("§7Selected moves: §f$movesCount"),
-                Text.literal("§7Custom moves: $enabledText"),
-            ),
-            // Book and quill texture
-            "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZWZmZDVkZDdmZTc0MjdkNGY5NjMwOTljZWQwZGFmYmU4M2NiOWIwZjk4NGJkNmYzNjU0N2I5ZjQwMDE0MzRkOCJ9fX0="
-        )
-    }
 
     /**
      * Creates a filler pane using a gray stained glass pane.

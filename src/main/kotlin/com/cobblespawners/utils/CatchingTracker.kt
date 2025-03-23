@@ -1,6 +1,5 @@
 package com.cobblespawners.utils
 
-import com.everlastingutils.utils.logDebug
 import com.cobblemon.mod.common.api.events.CobblemonEvents
 import com.cobblemon.mod.common.api.events.pokeball.PokeBallCaptureCalculatedEvent
 import com.cobblemon.mod.common.api.pokeball.catching.CaptureContext
@@ -16,20 +15,17 @@ import java.util.concurrent.ConcurrentHashMap
 
 class CatchingTracker {
 
-    // A data class to hold tracking information per player
+    // Tracking logic remains unchanged; omitted for brevity
     data class PokeballTrackingInfo(
         val pokeBallUuid: java.util.UUID,
         val pokeBallEntity: EmptyPokeBallEntity
     )
-
-    // Map to keep track of each player's pokeball tracking info
     private val playerTrackingMap = ConcurrentHashMap<ServerPlayerEntity, PokeballTrackingInfo>()
 
     fun registerEvents() {
         CobblemonEvents.POKE_BALL_CAPTURE_CALCULATED.subscribe { event ->
             handlePokeBallCaptureCalculated(event)
         }
-
         ServerTickEvents.END_SERVER_TICK.register { server ->
             playerTrackingMap.forEach { (player, trackingInfo) ->
                 val world = player.world as ServerWorld
@@ -46,95 +42,87 @@ class CatchingTracker {
         val pokemonEntity: PokemonEntity = event.pokemonEntity
         val thrower: ServerPlayerEntity? = pokeBallEntity.owner as? ServerPlayerEntity
 
-        logDebug("PokeBallCaptureCalculatedEvent triggered for Pokémon: ${pokemonEntity.pokemon.species.name}, UUID: ${pokemonEntity.uuid}", "cobblespawners")
+        println("Capture event for Pokémon: ${pokemonEntity.pokemon.species.name}")
 
         val spawnerInfo = SpawnerNBTManager.getPokemonInfo(pokemonEntity)
         if (spawnerInfo != null) {
-            logDebug("Pokémon ${pokemonEntity.pokemon.species.name} is from spawner at ${spawnerInfo.spawnerPos}", "cobblespawners")
-
+            println("Pokémon is from spawner at ${spawnerInfo.spawnerPos}")
             val spawnerData = CobbleSpawnersConfig.spawners[spawnerInfo.spawnerPos]
-            val pokemonSpawnEntry = spawnerData?.selectedPokemon?.find {
-                it.pokemonName.equals(pokemonEntity.pokemon.species.name, ignoreCase = true)
-            }
+            if (spawnerData != null) {
+                // Extract Pokémon details
+                val speciesName = pokemonEntity.pokemon.species.name
+                val formName = if (pokemonEntity.pokemon.form.name == "Standard") "Normal" else pokemonEntity.pokemon.form.name
+                val pokemonAspects = pokemonEntity.pokemon.aspects.toSet()
 
-            if (pokemonSpawnEntry != null) {
-                val captureSettings = pokemonSpawnEntry.captureSettings
+                println("Pokémon details: species=$speciesName, form=$formName, aspects=$pokemonAspects")
 
-                // If isCatchable is false, deny capture
-                if (!captureSettings.isCatchable) {
-                    event.captureResult = CaptureContext(
-                        numberOfShakes = 0,
-                        isSuccessfulCapture = false,
-                        isCriticalCapture = false
-                    )
-                    logDebug("Capture attempt failed: ${pokemonEntity.pokemon.species.name} is not catchable.", "cobblespawners")
+                // Define gender aspects to ignore
+                val genderAspects = setOf("male", "female")
 
-                    thrower?.sendMessage(
-                        Text.literal("This Pokémon cannot be captured!")
-                            .formatted(Formatting.RED),
-                        false
-                    )
-                    logDebug("Sent message to player: This Pokémon cannot be captured!", "cobblespawners")
-
-                    // Track this player’s pokeball for potential removal in the tick event
-                    thrower?.let {
-                        playerTrackingMap[it] = PokeballTrackingInfo(pokeBallEntity.uuid, pokeBallEntity)
-                    }
-                    return // Exit early since this Pokémon cannot be caught
+                // Find matching spawn entry, ignoring gender
+                val pokemonSpawnEntry = spawnerData.selectedPokemon.find {
+                    it.pokemonName.equals(speciesName, ignoreCase = true) &&
+                            (it.formName?.equals(formName, ignoreCase = true) ?: (formName == "Normal")) &&
+                            // Remove gender aspects from Pokémon before comparison
+                            run {
+                                val configAspectsLower = it.aspects.map { a -> a.lowercase() }.toSet()
+                                val pokemonAspectsLower = pokemonAspects.map { a -> a.lowercase() }.toSet()
+                                // Remove gender aspects from Pokémon before comparison
+                                val pokemonAspectsWithoutGender =
+                                    pokemonAspectsLower.filter { aspect -> aspect !in genderAspects }.toSet()
+                                println("Matching: configAspects=$configAspectsLower, pokemonAspectsWithoutGender=$pokemonAspectsWithoutGender")
+                                // Remove gender aspects from Pokémon before comparison
+                                configAspectsLower == pokemonAspectsWithoutGender
+                            }
                 }
 
-                val usedPokeBall = pokeBallEntity.pokeBall
-                val usedPokeBallName = usedPokeBall.name.toString()
-                val allowedPokeBalls = prepareAllowedPokeBallList(captureSettings.requiredPokeBalls)
+                if (pokemonSpawnEntry != null) {
+                    val captureSettings = pokemonSpawnEntry.captureSettings
+                    println("Matched entry with captureSettings: isCatchable=${captureSettings.isCatchable}")
 
-                logDebug("Used Pokéball: $usedPokeBallName, Allowed Pokéballs: $allowedPokeBalls", "cobblespawners")
-
-                if (captureSettings.restrictCaptureToLimitedBalls) {
-                    if (!allowedPokeBalls.contains("ALL") && !isValidPokeBall(allowedPokeBalls, usedPokeBallName)) {
+                    if (!captureSettings.isCatchable) {
                         event.captureResult = CaptureContext(
                             numberOfShakes = 0,
                             isSuccessfulCapture = false,
                             isCriticalCapture = false
                         )
-                        logDebug("Capture attempt failed: ${pokemonEntity.pokemon.species.name} can only be captured with one of the following balls: $allowedPokeBalls.", "cobblespawners")
+                        println("Capture failed: Pokémon is not catchable.")
+                        thrower?.sendMessage(Text.literal("This Pokémon cannot be captured!").formatted(Formatting.RED), false)
+                        thrower?.let { playerTrackingMap[it] = PokeballTrackingInfo(pokeBallEntity.uuid, pokeBallEntity) }
+                        return
+                    }
 
-                        thrower?.sendMessage(
-                            Text.literal("Only the following Pokéballs can capture this Pokémon: $allowedPokeBalls!")
-                                .formatted(Formatting.RED),
-                            false
-                        )
-                        logDebug("Sent message to player: Only the following Pokéballs can capture this Pokémon: $allowedPokeBalls!", "cobblespawners")
+                    val usedPokeBallName = pokeBallEntity.pokeBall.name.toString()
+                    val allowedPokeBalls = prepareAllowedPokeBallList(captureSettings.requiredPokeBalls)
 
-                        // Track this player’s pokeball for potential removal in the tick event
-                        thrower?.let {
-                            playerTrackingMap[it] = PokeballTrackingInfo(pokeBallEntity.uuid, pokeBallEntity)
+                    if (captureSettings.restrictCaptureToLimitedBalls) {
+                        if (!allowedPokeBalls.contains("ALL") && !isValidPokeBall(allowedPokeBalls, usedPokeBallName)) {
+                            event.captureResult = CaptureContext(
+                                numberOfShakes = 0,
+                                isSuccessfulCapture = false,
+                                isCriticalCapture = false
+                            )
+                            println("Capture failed: Invalid Poké Ball used.")
+                            thrower?.sendMessage(Text.literal("Only these Poké Balls work: $allowedPokeBalls!").formatted(Formatting.RED), false)
+                            thrower?.let { playerTrackingMap[it] = PokeballTrackingInfo(pokeBallEntity.uuid, pokeBallEntity) }
+                        } else {
+                            println("Capture allowed with valid Poké Ball.")
                         }
                     } else {
-                        logDebug("Valid Pokéball used successfully to capture ${pokemonEntity.pokemon.species.name}.", "cobblespawners")
+                        println("Capture allowed with any Poké Ball.")
                     }
                 } else {
-                    logDebug("No capture restriction for Pokémon: ${pokemonEntity.pokemon.species.name}. Any Pokéball is allowed.", "cobblespawners")
+                    println("No matching entry found. Capture allowed.")
                 }
-            } else {
-                logDebug("Pokémon ${pokemonEntity.pokemon.species.name} not found in the spawner's configuration.", "cobblespawners")
             }
         } else {
-            logDebug("Pokémon ${pokemonEntity.pokemon.species.name} is NOT from a spawner.", "cobblespawners")
+            println("Pokémon not from spawner. Capture allowed.")
         }
     }
 
-
-    /**
-     * Prepares the list of allowed Poké Balls by ensuring each name has the "cobblemon:" namespace.
-     */
+    // Helper functions remain unchanged; omitted for brevity
     private fun prepareAllowedPokeBallList(allowedPokeBalls: List<String>): List<String> {
-        return allowedPokeBalls.map { ball ->
-            if (!ball.contains(":")) {
-                "cobblemon:$ball" // Add the "cobblemon:" namespace if not present
-            } else {
-                ball // Already namespaced, keep as is
-            }
-        }
+        return allowedPokeBalls.map { if (!it.contains(":")) "cobblemon:$it" else it }
     }
 
     private fun isValidPokeBall(allowedPokeBalls: List<String>, usedPokeBallName: String): Boolean {
@@ -144,17 +132,9 @@ class CatchingTracker {
 
     private fun returnPokeballToPlayer(player: ServerPlayerEntity?, pokeBallEntity: EmptyPokeBallEntity) {
         if (player == null) return
-
         pokeBallEntity.discard()
-
-        val usedPokeBallItem = pokeBallEntity.pokeBall.item()
-        val pokeBallStack = usedPokeBallItem.defaultStack
-
+        val pokeBallStack = pokeBallEntity.pokeBall.item().defaultStack
         val ballPos = pokeBallEntity.blockPos
-
-        val world = player.world
-        world.spawnEntity(net.minecraft.entity.ItemEntity(world, ballPos.x + 0.5, ballPos.y + 0.5, ballPos.z + 0.5, pokeBallStack))
-
-        logDebug("Spawned Pokéball ${usedPokeBallItem.name} at ${ballPos.x}, ${ballPos.y}, ${ballPos.z} after failed capture.", "cobblespawners")
+        player.world.spawnEntity(net.minecraft.entity.ItemEntity(player.world, ballPos.x + 0.5, ballPos.y + 0.5, ballPos.z + 0.5, pokeBallStack))
     }
 }

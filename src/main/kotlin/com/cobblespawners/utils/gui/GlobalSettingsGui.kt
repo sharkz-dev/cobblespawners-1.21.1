@@ -30,7 +30,7 @@ object GlobalSettingsGui {
         // Store the spawner position if provided
         if (spawnerPos != null) {
             playerSpawnerMap[player] = spawnerPos
-            logger.info("Stored spawner position $spawnerPos for player ${player.name.string}")
+            //logger.info("Stored spawner position $spawnerPos for player ${player.name.string}")
         }
 
         // Access globalConfig from CobbleSpawnersConfig
@@ -42,21 +42,21 @@ object GlobalSettingsGui {
                 when (context.slotIndex) {
                     11 -> {
                         globalConfig.debugEnabled = !globalConfig.debugEnabled
-                        logger.info("Toggled Debug Mode to ${globalConfig.debugEnabled}")
+                        //logger.info("Toggled Debug Mode to ${globalConfig.debugEnabled}")
                         updateGuiItem(context, player, "Debug Mode", globalConfig.debugEnabled, Formatting.GOLD)
                         CobbleSpawnersConfig.saveConfigBlocking()
                         player.sendMessage(Text.literal("Debug Mode is now ${if (globalConfig.debugEnabled) "ON" else "OFF"}"), false)
                     }
                     13 -> {
                         globalConfig.cullSpawnerPokemonOnServerStop = !globalConfig.cullSpawnerPokemonOnServerStop
-                        logger.info("Toggled Cull Spawner Pokémon on Stop to ${globalConfig.cullSpawnerPokemonOnServerStop}")
+                        //logger.info("Toggled Cull Spawner Pokémon on Stop to ${globalConfig.cullSpawnerPokemonOnServerStop}")
                         updateGuiItem(context, player, "Cull Spawner Pokémon on Stop", globalConfig.cullSpawnerPokemonOnServerStop, Formatting.RED)
                         CobbleSpawnersConfig.saveConfigBlocking()
                         player.sendMessage(Text.literal("Cull Spawner Pokémon on Stop is now ${if (globalConfig.cullSpawnerPokemonOnServerStop) "ON" else "OFF"}"), false)
                     }
                     15 -> {
                         globalConfig.showUnimplementedPokemonInGui = !globalConfig.showUnimplementedPokemonInGui
-                        logger.info("Toggled Show Unimplemented Pokémon in GUI to ${globalConfig.showUnimplementedPokemonInGui}")
+                        //logger.info("Toggled Show Unimplemented Pokémon in GUI to ${globalConfig.showUnimplementedPokemonInGui}")
                         updateGuiItem(context, player, "Show Unimplemented Pokémon in GUI", globalConfig.showUnimplementedPokemonInGui, Formatting.BLUE)
                         CobbleSpawnersConfig.saveConfigBlocking()
                         player.sendMessage(Text.literal("Show Unimplemented Pokémon in GUI is now ${if (globalConfig.showUnimplementedPokemonInGui) "ON" else "OFF"}"), false)
@@ -64,7 +64,7 @@ object GlobalSettingsGui {
                     30 -> {
                         // Show Form button moved to slot 30
                         globalConfig.showFormsInGui = !globalConfig.showFormsInGui
-                        logger.info("Toggled Show Form in GUI to ${globalConfig.showFormsInGui}")
+                        //logger.info("Toggled Show Form in GUI to ${globalConfig.showFormsInGui}")
                         updateGuiItem(context, player, "Show Form in GUI", globalConfig.showFormsInGui, Formatting.GREEN)
                         CobbleSpawnersConfig.saveConfigBlocking()
                         player.sendMessage(Text.literal("Show Form in GUI is now ${if (globalConfig.showFormsInGui) "ON" else "OFF"}"), false)
@@ -72,13 +72,13 @@ object GlobalSettingsGui {
                     32 -> {
                         // New button for aspects moved to slot 32
                         globalConfig.showAspectsInGui = !globalConfig.showAspectsInGui
-                        logger.info("Toggled Show Aspects in GUI to ${globalConfig.showAspectsInGui}")
+                        //logger.info("Toggled Show Aspects in GUI to ${globalConfig.showAspectsInGui}")
                         updateGuiItem(context, player, "Show Aspects in GUI", globalConfig.showAspectsInGui, Formatting.DARK_PURPLE)
                         CobbleSpawnersConfig.saveConfigBlocking()
                         player.sendMessage(Text.literal("Show Aspects in GUI is now ${if (globalConfig.showAspectsInGui) "ON" else "OFF"}"), false)
                     }
                     49 -> {
-                        logger.info("Back button clicked. Saving config and returning to Pokémon Selection GUI.")
+                        //logger.info("Back button clicked. Saving config and returning to Pokémon Selection GUI.")
                         CobbleSpawnersConfig.saveConfigBlocking()
 
                         // Get the stored spawner position
@@ -94,7 +94,7 @@ object GlobalSettingsGui {
                     // No else clause here; clicks on unhandled slots (e.g., glass panes) are ignored
                 }
             } catch (e: Exception) {
-                logger.error("Error handling GUI interaction at slot ${context.slotIndex}: ${e.message}", e)
+                //logger.error("Error handling GUI interaction at slot ${context.slotIndex}: ${e.message}", e)
                 player.sendMessage(Text.literal("An error occurred while updating settings."), false)
             }
         }
@@ -102,7 +102,7 @@ object GlobalSettingsGui {
         val onClose: (Inventory) -> Unit = {
             // Clean up the stored spawner position when the GUI is closed
             playerSpawnerMap.remove(player)
-            logger.info("Global settings GUI closed by player ${player.name.string}.")
+            //logger.info("Global settings GUI closed by player ${player.name.string}.")
             player.sendMessage(Text.literal("Global settings closed."), false)
         }
 

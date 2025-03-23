@@ -31,6 +31,7 @@ public class SpawnerNBTManager {
         return UUID.nameUUIDFromBytes(("cobblespawner:" + pos.toShortString()).getBytes());
     }
 
+
     public static void addPokemon(PokemonEntity entity, BlockPos spawnerPos, String speciesName) {
         if (entity instanceof SpawnerDataProvider provider) {
             UUID spawnerUUID = createSpawnerUUID(spawnerPos);

@@ -154,7 +154,8 @@ object SpawnerBlockEvents {
                 spawnRadius = SpawnRadius(width = 4, height = 4),
                 spawnLimit = 4,
                 spawnAmountPerSpawn = 1,
-                visible = true
+                visible = true,
+                wanderingSettings = WanderingSettings() // Include default wandering settings
             )
         }
 
@@ -204,11 +205,14 @@ object SpawnerBlockEvents {
 
     private fun invalidatePositionsIfWithinRadius(world: ServerWorld, changedBlockPos: BlockPos) {
         for ((pos, data) in CobbleSpawnersConfig.spawners) {
-            val distanceSquared = pos.getSquaredDistance(changedBlockPos)
-            val maxDistanceSquared = (data.spawnRadius.width * data.spawnRadius.width).toDouble()
-            if (distanceSquared <= maxDistanceSquared) {
-                CobbleSpawners.spawnerValidPositions.remove(pos)
-                logDebug("Invalidated cached positions for spawner at $pos due to block change @ $changedBlockPos", "cobblespawners")
+            val spawnRadius = data.spawnRadius
+            if (spawnRadius != null) {
+                val distanceSquared = pos.getSquaredDistance(changedBlockPos)
+                val maxDistanceSquared = (spawnRadius.width * spawnRadius.width).toDouble()
+                if (distanceSquared <= maxDistanceSquared) {
+                    CobbleSpawners.spawnerValidPositions.remove(pos)
+                    logDebug("Invalidated cached positions for spawner at $pos due to block change @ $changedBlockPos", "cobblespawners")
+                }
             }
         }
     }

@@ -1,6 +1,5 @@
 package com.cobblespawners.utils.gui
 
-
 import com.everlastingutils.gui.CustomGui
 import com.everlastingutils.gui.InteractionContext
 import com.everlastingutils.gui.setCustomName
@@ -22,8 +21,9 @@ object PokemonEditSubGui {
         const val IV_SETTINGS = 11
         const val EV_SETTINGS = 13
         const val SPAWN_SETTINGS = 15
-        const val SIZE_SETTINGS = 21
-        const val CAPTURE_SETTINGS = 23
+        const val SIZE_SETTINGS = 20  // Changed from 21
+        const val MOVES_SETTINGS = 22  // New
+        const val CAPTURE_SETTINGS = 24  // Changed from 23
         const val OTHER_SETTINGS = 31
         const val BACK = 49
     }
@@ -31,12 +31,13 @@ object PokemonEditSubGui {
     // Common textures
     object Textures {
         const val BACK = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNzI0MzE5MTFmNDE3OGI0ZDJiNDEzYWE3ZjVjNzhhZTQ0NDdmZTkyNDY5NDNjMzFkZjMxMTYzYzBlMDQzZTBkNiJ9fX0="
-        const val IV_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTUyODUyNWMwYTc4Mzk4NmQxODYzYjU4YmJiNTExZjgwYWI0MTFkOGRhYTk2Zjg3NGJjZDlmNjU4ODA5YThhOSJ9fX0="
-        const val EV_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYmI2ZjE3ZjdhNDlkNmEwMmM4NTlmZTcxNWNjM2VhM2I5ZTUxZjE0MzA2MDJhNjAxODhlZDcwZDU3ZDBmNzcwMyJ9fX0="
-        const val SPAWN_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvN2VhODYzYWY4ZTIwOGNjNzBkZjhlZmM4MzU5YzZhY2MwZGVkMzBkY2M1ODhiN2IwNGRjZGU1NWRjNjEzMmY1YyJ9fX0="
-        const val SIZE_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMTQ5NGJhYWFhMjE3NmEwNDAyYzUyNzFmZWZlMTIyOTdhMWE1ODc3YzhlMGJkZmRkNGJlNThlZGVjZjYyY2Y4YyJ9fX0="
+        const val IV_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNDg4M2Q2NTZlNDljMzhjNmI1Mzc4NTcyZjMxYzYzYzRjN2E1ZGQ0Mzc1YjZlY2JjYTQzZjU5NzFjMmNjNGZmIn19fQ=="
+        const val EV_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvODM0NTI5NjRmMWNiYjg5MTQ2Njg0YWE1NTYzOTBhOThjZjM0MmNhOTdjZWZhNmE5Mjk0YTVkMzZlZGQ5MzBmOSJ9fX0="
+        const val SPAWN_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNjdkNmJlMWRjYTUzNTJhNTY5M2UyOWVhMzVkODA2YjJhMjdjNGE5N2I2NGVlYmJmNjMyYzk5OGQ1OTQ4ZjFjNCJ9fX0="
+        const val SIZE_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMmI5MmFiZWI0NGMzNGI5OThhMDE4ZWM1YjYwMjJlOGZjMTU4ZWU4YjEzNDA0YzBmZTZkZDA5MTdmZWQ4NDRlYiJ9fX0="
         const val CAPTURE_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZTY0YzQ0ODZmOTIzNmY5YTFmYjRiMjFiZjgyM2M1NTZkNmUxNWJmNjg4Yzk2ZDZlZjBkMTc1NTNkYjUwNWIifX19"
-        const val OTHER_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNDMzZjVjYzlkZTM1ODVkOGY2NDMzMGY0NDY4ZDE1NmJhZjAzNGEyNWRjYjc3M2MwNDc5ZDdjYTUyNmExM2Q2MSJ9fX0="
+        const val OTHER_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMWEwMWQxNTZiMTcyMTVjZWYzMzZhZjRjNDRlNmNjOGNjYjI4NWZiMDViYzNmZWI2MmQzMzdmZWIxZjA5MjkwYSJ9fX0="
+        const val MOVES_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYzJlYmJkYjE4ZDc0NzI4MWI1NDYyZjg1N2VlOTg0Njc1YTM5ZDVhMDI3NDQ0NmEyMmY2NjI2NGE1M2QyYjAzNCJ9fX0="
     }
 
     fun openPokemonEditSubGui(
@@ -106,6 +107,10 @@ object PokemonEditSubGui {
                 CustomGui.closeGui(player)
                 SizeSettingsGui.openSizeEditorGui(player, spawnerPos, pokemonName, formName, additionalAspects)
             }
+            Slots.MOVES_SETTINGS -> {
+                CustomGui.closeGui(player)
+                MovesSettingsGui.openMovesSettingsGui(player, spawnerPos, pokemonName, formName, additionalAspects)
+            }
             Slots.CAPTURE_SETTINGS -> {
                 CustomGui.closeGui(player)
                 CaptureSettingsGui.openCaptureSettingsGui(player, spawnerPos, pokemonName, formName, additionalAspects)
@@ -140,11 +145,10 @@ object PokemonEditSubGui {
                 )
             ),
             Slots.SPAWN_SETTINGS to Triple(
-                "Edit Spawn/Level Chances/Initial Moves", Formatting.DARK_AQUA,
+                "Edit Spawn/Level Chances", Formatting.DARK_AQUA,
                 listOf(
                     "§7Customize spawn probabilities",
-                    "§7define minimum/maximum level thresholds.",
-                    "§7adjust the default moves the cobblemon has selected for battle"
+                    "§7define minimum/maximum level thresholds."
                 )
             ),
             Slots.SIZE_SETTINGS to Triple(
@@ -152,6 +156,13 @@ object PokemonEditSubGui {
                 listOf(
                     "§7Adjust the Pokémon's dimensions",
                     "§7within the spawner for the desired scale."
+                )
+            ),
+            Slots.MOVES_SETTINGS to Triple(
+                "Edit Moves", Formatting.YELLOW,
+                listOf(
+                    "§7Configure the initial moves",
+                    "§7that the Pokémon will have when spawned."
                 )
             ),
             Slots.CAPTURE_SETTINGS to Triple(
@@ -170,7 +181,7 @@ object PokemonEditSubGui {
             ),
             Slots.BACK to Triple(
                 "Back", Formatting.RED,
-                listOf("§7Return to the primary interface.")
+                listOf("§7Returns to the spawner Pokémon selection.")
             )
         )
 
@@ -179,6 +190,7 @@ object PokemonEditSubGui {
             Slots.EV_SETTINGS to Textures.EV_SETTINGS,
             Slots.SPAWN_SETTINGS to Textures.SPAWN_SETTINGS,
             Slots.SIZE_SETTINGS to Textures.SIZE_SETTINGS,
+            Slots.MOVES_SETTINGS to Textures.MOVES_SETTINGS,
             Slots.CAPTURE_SETTINGS to Textures.CAPTURE_SETTINGS,
             Slots.OTHER_SETTINGS to Textures.OTHER_SETTINGS,
             Slots.BACK to Textures.BACK

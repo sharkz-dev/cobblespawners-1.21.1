@@ -47,16 +47,6 @@ object SpawnerPokemonSelectionGui {
     // Cache for additional aspect sets per species name (keyed in lowercase)
     private val additionalAspectsCache = mutableMapOf<String, List<Set<String>>>()
 
-    // Cache for full GUI layouts based on state. Now includes a configKey.
-    private data class GuiLayoutKey(
-        val page: Int,
-        val sortMethod: SortMethod,
-        val searchTerm: String,
-        val selectedPokemonKey: String,
-        val configKey: String
-    )
-    private val guiLayoutCache = ConcurrentHashMap<GuiLayoutKey, List<ItemStack>>()
-
     // UI constants
     private object Slots {
         const val PREV_PAGE = 45
@@ -92,6 +82,8 @@ object SpawnerPokemonSelectionGui {
             player.sendMessage(Text.literal("You don't have permission to use this GUI."), false)
             return
         }
+        // Clear variant cache so config changes (e.g. spawn chance, level values) are picked up.
+        invalidateCaches()
 
         val currentSpawnerData = CobbleSpawnersConfig.spawners[spawnerPos] ?: run {
             player.sendMessage(Text.literal("Spawner data not found"), false)
@@ -105,7 +97,7 @@ object SpawnerPokemonSelectionGui {
             player,
             "Select Pokémon for ${currentSpawnerData.spawnerName}",
             generateFullGuiLayout(currentSpawnerData.selectedPokemon, page),
-            { handleMainGuiInteraction(it, player, spawnerPos, currentSpawnerData.selectedPokemon, page) },
+            { context -> handleMainGuiInteraction(context, player, spawnerPos) },
             { inventory ->
                 spawnerGuisOpen.remove(spawnerPos)
                 playerPages.remove(player)
@@ -118,17 +110,17 @@ object SpawnerPokemonSelectionGui {
     private fun handleMainGuiInteraction(
         context: InteractionContext,
         player: ServerPlayerEntity,
-        spawnerPos: BlockPos,
-        selectedPokemon: List<PokemonSpawnEntry>,
-        page: Int
+        spawnerPos: BlockPos
     ) {
+        val currentSpawnerData = CobbleSpawnersConfig.spawners[spawnerPos] ?: return
+        val selectedPokemon = currentSpawnerData.selectedPokemon
         val clickedSlot = context.slotIndex
         val currentPage = playerPages[player] ?: 0
 
         when (clickedSlot) {
             Slots.PREV_PAGE -> if (currentPage > 0) {
                 playerPages[player] = currentPage - 1
-                refreshGuiItems(player, selectedPokemon, currentPage - 1)
+                refreshGuiItems(player, spawnerPos, currentPage - 1)
             }
             Slots.SORT_METHOD -> when (context.clickType) {
                 ClickType.LEFT -> {
@@ -151,7 +143,7 @@ object SpawnerPokemonSelectionGui {
                     }
 
                     CobbleSpawnersConfig.saveSpawnerData()
-                    refreshGuiItems(player, selectedPokemon, currentPage)
+                    refreshGuiItems(player, spawnerPos, currentPage)
                     player.sendMessage(Text.literal("Sort method changed to ${sortMethod.name}"), false)
                 }
                 ClickType.RIGHT -> {
@@ -178,10 +170,10 @@ object SpawnerPokemonSelectionGui {
                 val totalVariants = getTotalVariantsCount(selectedPokemon)
                 if ((currentPage + 1) * 45 < totalVariants) {
                     playerPages[player] = currentPage + 1
-                    refreshGuiItems(player, selectedPokemon, currentPage + 1)
+                    refreshGuiItems(player, spawnerPos, currentPage + 1)
                 }
             }
-            else -> handlePokemonItemClick(context, player, spawnerPos, selectedPokemon, currentPage)
+            else -> handlePokemonItemClick(context, player, spawnerPos, currentPage)
         }
     }
 
@@ -189,9 +181,10 @@ object SpawnerPokemonSelectionGui {
         context: InteractionContext,
         player: ServerPlayerEntity,
         spawnerPos: BlockPos,
-        selectedPokemon: List<PokemonSpawnEntry>,
         currentPage: Int
     ) {
+        val currentSpawnerData = CobbleSpawnersConfig.spawners[spawnerPos] ?: return
+        val selectedPokemon = currentSpawnerData.selectedPokemon
         val clickedItem = context.clickedStack
         if (clickedItem.item !is PokemonItem) return
 
@@ -227,9 +220,7 @@ object SpawnerPokemonSelectionGui {
                 }
 
                 // Refresh GUI
-                CobbleSpawnersConfig.getSpawner(spawnerPos)?.let { updatedData ->
-                    refreshGuiItems(player, updatedData.selectedPokemon, currentPage)
-                }
+                refreshGuiItems(player, spawnerPos, currentPage)
             }
             ClickType.RIGHT -> {
                 val existingEntry = CobbleSpawnersConfig.getPokemonSpawnEntry(
@@ -274,14 +265,15 @@ object SpawnerPokemonSelectionGui {
         } else ""
     }
 
-    private fun refreshGuiItems(player: ServerPlayerEntity, selectedPokemon: List<PokemonSpawnEntry>, page: Int) {
+    private fun refreshGuiItems(player: ServerPlayerEntity, spawnerPos: BlockPos, page: Int) {
+        val currentSpawnerData = CobbleSpawnersConfig.spawners[spawnerPos] ?: return
         // Cancel any ongoing computation
         playerComputations[player]?.cancel(false)
 
         // Start a new computation asynchronously
         val future = CompletableFuture.runAsync {
             try {
-                val items = generateFullGuiLayout(selectedPokemon, page)
+                val items = generateFullGuiLayout(currentSpawnerData.selectedPokemon, page)
                 // Update GUI on the main thread
                 player.server.execute {
                     CustomGui.refreshGui(player, items)
@@ -294,15 +286,8 @@ object SpawnerPokemonSelectionGui {
         playerComputations[player] = future
     }
 
-    // Modified generateFullGuiLayout to use caching.
+    // Modified generateFullGuiLayout: caching removed so config values (like spawn chance) are always re-read.
     private fun generateFullGuiLayout(selectedPokemon: List<PokemonSpawnEntry>, page: Int): List<ItemStack> {
-        val selectedKey = selectedPokemon.map { it.toKey() }.sorted().joinToString(",")
-        // Include config values in the key.
-        val globalConfig = CobbleSpawnersConfig.config.globalConfig
-        val configKey = "${globalConfig.showUnimplementedPokemonInGui}_${globalConfig.showFormsInGui}_${globalConfig.showAspectsInGui}"
-        val key = GuiLayoutKey(page, sortMethod, searchTerm, selectedKey, configKey)
-        guiLayoutCache[key]?.let { return it }
-
         val layout = generatePokemonItemsForGui(selectedPokemon, page).toMutableList()
         val totalVariants = getTotalVariantsCount(selectedPokemon)
 
@@ -349,15 +334,12 @@ object SpawnerPokemonSelectionGui {
 
         listOf(46, 47, 51, 52).forEach { layout[it] = createFillerPane() }
 
-        // Save the computed layout in the cache.
-        guiLayoutCache[key] = layout
         return layout
     }
 
     // Helper function to clear caches when parameters change.
     private fun invalidateCaches() {
         cachedVariants = null
-        guiLayoutCache.clear()
     }
 
     // ### Pokémon Items Generation
@@ -423,7 +405,6 @@ object SpawnerPokemonSelectionGui {
         val aspectsLore = if (CobbleSpawnersConfig.config.globalConfig.showAspectsInGui && additionalAspects.isNotEmpty())
             "§2Aspects: §a${additionalAspects.joinToString(", ") { it.replaceFirstChar { ch -> ch.uppercase() } }}"
         else {
-            // If aspects are disabled but shiny is present, still show "Shiny"
             if (additionalAspects.any { it.equals("shiny", ignoreCase = true) }) "§2Aspects: §aShiny" else ""
         }
         val pokemonLore = listOf(
@@ -529,8 +510,6 @@ object SpawnerPokemonSelectionGui {
         if (showFormsInGui || form.name != "Standard") {
             formAndAspects.add(displayFormName)
         }
-        // When aspects are enabled, add them normally.
-        // Otherwise, if "shiny" is present, always add "Shiny".
         if (CobbleSpawnersConfig.config.globalConfig.showAspectsInGui) {
             formAndAspects.addAll(additionalAspects.map { it.replaceFirstChar { it.uppercase() } })
         } else {
@@ -580,7 +559,6 @@ object SpawnerPokemonSelectionGui {
                     }.sortedBy { it.name }
                 }
             }
-            // For SELECTED, still generate all species then filter variants later.
             SortMethod.SELECTED -> PokemonSpecies.species.filter { showUnimplemented || it.implemented }.sortedBy { it.name }
         }
 
@@ -606,7 +584,6 @@ object SpawnerPokemonSelectionGui {
             variantsList.addAll(variants)
         }
 
-        // When sorting by SELECTED, filter out only those variants that are selected.
         if (sortMethod == SortMethod.SELECTED) {
             return variantsList.filter { variant -> isPokemonSelected(variant, selectedPokemon) }
         }
@@ -635,55 +612,36 @@ object SpawnerPokemonSelectionGui {
             val speciesSpecificAspects = mutableSetOf<String>()
 
             try {
-                // Create a temporary Pokémon to access its features
                 val tempPokemon = species.create()
 
-                // Get aspects from form data directly
+                // Collect aspects from forms
                 for (form in species.forms) {
                     form.aspects.forEach { aspect ->
                         speciesSpecificAspects.add(aspect)
                     }
                 }
 
-                // Use reflection to access the SpeciesFeatures if direct method isn’t available
-                val speciesFeatures = try {
-                    val featuresClass = Class.forName("com.cobblemon.mod.common.api.pokemon.feature.SpeciesFeatures")
-                    val instanceField = featuresClass.getDeclaredField("INSTANCE")
-                    val instance = instanceField.get(null)
-                    val getFeaturesMethod = featuresClass.getDeclaredMethod("getFeaturesFor", Class.forName("com.cobblemon.mod.common.pokemon.Species"))
-                    getFeaturesMethod.invoke(instance, species) as? Collection<*> ?: emptyList<Any>()
-                } catch (e: Exception) {
-                    logger.debug("Couldn’t access SpeciesFeatures via reflection: ${e.message}")
-                    emptyList<Any>()
-                }
-
-                // Process any feature providers found
+                // Directly access SpeciesFeatures
+                val speciesFeatures = SpeciesFeatures.getFeaturesFor(species)
                 speciesFeatures.filterIsInstance<ChoiceSpeciesFeatureProvider>().forEach { provider ->
                     try {
                         val aspects = provider.getAllAspects()
                         aspects.forEach { speciesSpecificAspects.add(it) }
                     } catch (e: Exception) {
-                        logger.debug("Error accessing aspects from provider: ${e.message}")
+                        logger.debug("Error accessing aspects from provider for ${species.name}: ${e.message}")
                     }
                 }
 
-                // Add individual aspect sets
+                // Build aspect sets
                 for (aspect in speciesSpecificAspects) {
                     aspectSets.add(setOf(aspect))
-                    // Add combined with shiny
                     aspectSets.add(setOf(aspect, "shiny"))
                 }
-
-                // Add shiny by itself
                 aspectSets.add(setOf("shiny"))
-
-                // Remove duplicates
                 aspectSets.distinctBy { it.toSortedSet().joinToString(",") }
             } catch (e: Exception) {
                 logger.error("Error in getAdditionalAspectSets for ${species.name}: ${e.message}")
-                when (species.name.lowercase()) {
-                    else -> listOf(setOf("shiny"))
-                }
+                listOf(setOf("shiny")) // Fallback
             }
         }
     }

@@ -60,7 +60,13 @@ object ParticleUtils {
         }
 
         // Render the cube outline around the spawner
-        renderCubeOutline(player, blueFlameParticle, centerPos, spawnerData.spawnRadius.width, spawnerData.spawnRadius.height)
+        renderCubeOutline(
+            player,
+            blueFlameParticle,
+            centerPos,
+            spawnerData.spawnRadius?.width ?: 4,
+            spawnerData.spawnRadius?.height ?: 4
+        )
     }
 
     private fun renderCubeOutline(

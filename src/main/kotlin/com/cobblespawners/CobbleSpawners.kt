@@ -8,8 +8,10 @@ import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
 import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblespawners.mixin.ServerWorldAccessor
 import com.cobblespawners.api.SpawnerNBTManager
+import com.cobblespawners.mixin.MobEntityAccessor
 import com.cobblespawners.utils.*
 import net.fabricmc.api.ModInitializer
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.minecraft.block.Blocks
 import net.minecraft.item.Items
@@ -19,6 +21,7 @@ import net.minecraft.server.MinecraftServer
 import net.minecraft.server.world.ServerWorld
 import net.minecraft.util.Identifier
 import net.minecraft.util.math.BlockPos
+import net.minecraft.util.math.Vec3d
 import net.minecraft.util.math.random.Random
 import net.minecraft.world.World
 import net.minecraft.world.chunk.ChunkStatus
@@ -61,7 +64,36 @@ object CobbleSpawners : ModInitializer {
 		// Instead of using ServerTickEvents, schedule a recurring task using system time.
 		ServerLifecycleEvents.SERVER_STARTED.register { server ->
 			registerSpawnScheduler(server)
+			battleTracker.startCleanupScheduler(server)
 		}
+
+		ServerEntityEvents.ENTITY_LOAD.register { entity, world ->
+			if (entity is PokemonEntity) {
+				val spawnerInfo = SpawnerNBTManager.getPokemonInfo(entity)
+				if (spawnerInfo != null) {
+					val spawnerData = CobbleSpawnersConfig.getSpawner(spawnerInfo.spawnerPos)
+					if (spawnerData != null) {
+						val wanderingSettings = spawnerData.wanderingSettings
+						// Ensure that the specific spawner's wandering setting is enabled
+						if (wanderingSettings?.enabled == true) {
+							val goalSelector = (entity as MobEntityAccessor).getGoalSelector()
+							val alreadyHasWander = goalSelector.goals.any { it.goal is WanderBackToSpawnerGoal }
+							if (!alreadyHasWander) {
+								val wanderGoal = WanderBackToSpawnerGoal(
+									entity,
+									wanderingSettings,
+									Vec3d.ofCenter(spawnerInfo.spawnerPos),
+									1.0 // Speed as Double
+								)
+								goalSelector.add(1, wanderGoal)
+							}
+						}
+					}
+				}
+			}
+		}
+
+
 	}
 
 	private fun registerServerLifecycleEvents() {
@@ -349,6 +381,29 @@ object CobbleSpawners : ModInitializer {
 			pokemonEntity.pitch
 		)
 
+		// --- New: Initialize the wander goal (Experimental) ---
+		val spawnerData = CobbleSpawnersConfig.getSpawner(spawnerPos)
+		if (spawnerData != null) {
+			val wanderingSettings = spawnerData.wanderingSettings
+			// Check the specific spawner's wandering setting before adding the goal
+			if (wanderingSettings?.enabled == true) {
+				val spawnerCenter = Vec3d.ofCenter(spawnerPos)
+				val speed = 1.0  // Adjust as needed
+
+				val wanderGoal = WanderBackToSpawnerGoal(
+					pokemonEntity,
+					wanderingSettings,  // WanderingSettings is safe to use here
+					spawnerCenter,
+					speed              // tickDelay defaults to 55
+				)
+				(pokemonEntity as MobEntityAccessor).getGoalSelector().add(0, wanderGoal)
+			}
+		} else {
+			logger.warn("Spawner data not found for spawner at $spawnerPos, skipping wander goal initialization.")
+		}
+
+
+
 		val success = if (lowLevel) {
 			try {
 				(serverWorld as com.cobblespawners.mixin.ServerWorldAccessor).invokeAddFreshEntity(pokemonEntity)
@@ -513,6 +568,7 @@ object CobbleSpawners : ModInitializer {
 
 	fun computeValidSpawnPositions(world: ServerWorld, data: SpawnerData): Map<String, List<BlockPos>> {
 		val spawnerPos = data.spawnerPos
+		val spawnRadius = data.spawnRadius ?: SpawnRadius() // Use default if null
 		val map = mutableMapOf<String, MutableList<BlockPos>>()
 		SpawnLocationType.values().forEach { map[it.name] = mutableListOf() }
 
@@ -520,12 +576,12 @@ object CobbleSpawners : ModInitializer {
 		val chunkZ = spawnerPos.z shr 4
 		if (world.getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) == null) return emptyMap()
 
-		val minX = spawnerPos.x - data.spawnRadius.width
-		val maxX = spawnerPos.x + data.spawnRadius.width
-		val minY = spawnerPos.y - data.spawnRadius.height
-		val maxY = spawnerPos.y + data.spawnRadius.height
-		val minZ = spawnerPos.z - data.spawnRadius.width
-		val maxZ = spawnerPos.z + data.spawnRadius.width
+		val minX = spawnerPos.x - spawnRadius.width
+		val maxX = spawnerPos.x + spawnRadius.width
+		val minY = spawnerPos.y - spawnRadius.height
+		val maxY = spawnerPos.y + spawnRadius.height
+		val minZ = spawnerPos.z - spawnRadius.width
+		val maxZ = spawnerPos.z + spawnRadius.width
 
 		for (x in minX..maxX) {
 			for (y in minY..maxY) {
