@@ -6,6 +6,7 @@ import com.cobblemon.mod.common.api.pokeball.catching.CaptureContext
 import com.cobblemon.mod.common.entity.pokeball.EmptyPokeBallEntity
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
 import com.cobblespawners.api.SpawnerNBTManager
+import com.everlastingutils.utils.logDebug
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
 import net.minecraft.server.network.ServerPlayerEntity
 import net.minecraft.server.world.ServerWorld
@@ -42,11 +43,11 @@ class CatchingTracker {
         val pokemonEntity: PokemonEntity = event.pokemonEntity
         val thrower: ServerPlayerEntity? = pokeBallEntity.owner as? ServerPlayerEntity
 
-        println("Capture event for Pokémon: ${pokemonEntity.pokemon.species.name}")
+        logDebug("Capture event for Pokémon: ${pokemonEntity.pokemon.species.name}", "cobblespawners")
 
         val spawnerInfo = SpawnerNBTManager.getPokemonInfo(pokemonEntity)
         if (spawnerInfo != null) {
-            println("Pokémon is from spawner at ${spawnerInfo.spawnerPos}")
+            logDebug("Pokémon is from spawner at ${spawnerInfo.spawnerPos}", "cobblespawners")
             val spawnerData = CobbleSpawnersConfig.spawners[spawnerInfo.spawnerPos]
             if (spawnerData != null) {
                 // Extract Pokémon details
@@ -54,7 +55,7 @@ class CatchingTracker {
                 val formName = if (pokemonEntity.pokemon.form.name == "Standard") "Normal" else pokemonEntity.pokemon.form.name
                 val pokemonAspects = pokemonEntity.pokemon.aspects.toSet()
 
-                println("Pokémon details: species=$speciesName, form=$formName, aspects=$pokemonAspects")
+                logDebug("Pokémon details: species=$speciesName, form=$formName, aspects=$pokemonAspects", "cobblespawners")
 
                 // Define gender aspects to ignore
                 val genderAspects = setOf("male", "female")
@@ -70,7 +71,7 @@ class CatchingTracker {
                                 // Remove gender aspects from Pokémon before comparison
                                 val pokemonAspectsWithoutGender =
                                     pokemonAspectsLower.filter { aspect -> aspect !in genderAspects }.toSet()
-                                println("Matching: configAspects=$configAspectsLower, pokemonAspectsWithoutGender=$pokemonAspectsWithoutGender")
+                                logDebug("Matching: configAspects=$configAspectsLower, pokemonAspectsWithoutGender=$pokemonAspectsWithoutGender", "cobblespawners")
                                 // Remove gender aspects from Pokémon before comparison
                                 configAspectsLower == pokemonAspectsWithoutGender
                             }
@@ -78,7 +79,7 @@ class CatchingTracker {
 
                 if (pokemonSpawnEntry != null) {
                     val captureSettings = pokemonSpawnEntry.captureSettings
-                    println("Matched entry with captureSettings: isCatchable=${captureSettings.isCatchable}")
+                    logDebug("Matched entry with captureSettings: isCatchable=${captureSettings.isCatchable}", "cobblespawners")
 
                     if (!captureSettings.isCatchable) {
                         event.captureResult = CaptureContext(
@@ -86,7 +87,7 @@ class CatchingTracker {
                             isSuccessfulCapture = false,
                             isCriticalCapture = false
                         )
-                        println("Capture failed: Pokémon is not catchable.")
+                        logDebug("Capture failed: Pokémon is not catchable.", "cobblespawners")
                         thrower?.sendMessage(Text.literal("This Pokémon cannot be captured!").formatted(Formatting.RED), false)
                         thrower?.let { playerTrackingMap[it] = PokeballTrackingInfo(pokeBallEntity.uuid, pokeBallEntity) }
                         return
@@ -102,21 +103,21 @@ class CatchingTracker {
                                 isSuccessfulCapture = false,
                                 isCriticalCapture = false
                             )
-                            println("Capture failed: Invalid Poké Ball used.")
+                            logDebug("Capture failed: Invalid Poké Ball used.", "cobblespawners")
                             thrower?.sendMessage(Text.literal("Only these Poké Balls work: $allowedPokeBalls!").formatted(Formatting.RED), false)
                             thrower?.let { playerTrackingMap[it] = PokeballTrackingInfo(pokeBallEntity.uuid, pokeBallEntity) }
                         } else {
-                            println("Capture allowed with valid Poké Ball.")
+                            logDebug("Capture allowed with valid Poké Ball.", "cobblespawners")
                         }
                     } else {
-                        println("Capture allowed with any Poké Ball.")
+                        logDebug("Capture allowed with any Poké Ball.", "cobblespawners")
                     }
                 } else {
-                    println("No matching entry found. Capture allowed.")
+                    logDebug("No matching entry found. Capture allowed.", "cobblespawners")
                 }
             }
         } else {
-            println("Pokémon not from spawner. Capture allowed.")
+            logDebug("Pokémon not from spawner. Capture allowed.", "cobblespawners")
         }
     }
 
