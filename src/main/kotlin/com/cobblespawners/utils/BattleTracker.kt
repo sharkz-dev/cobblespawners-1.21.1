@@ -25,12 +25,6 @@ import java.util.concurrent.TimeUnit
 class BattleTracker {
     private val logger = org.slf4j.LoggerFactory.getLogger("cobblespawners")
 
-    private fun logDebug(message: String) {
-        if (CobbleSpawnersConfig.config.globalConfig.debugEnabled) {
-            logger.info("[DEBUG] $message")
-        }
-    }
-
     enum class BattleEndCause {
         NORMAL_VICTORY,
         FLED,
@@ -93,8 +87,8 @@ class BattleTracker {
             TimeUnit.MILLISECONDS,
             { cleanupBattles(server) }
         )
-        logDebug("Started battle cleanup scheduler with ID: $schedulerId")
-        println("Started battle cleanup scheduler with ID: $schedulerId")
+
+        logDebug("Started battle cleanup scheduler with ID: $schedulerId", "cobblespawners")
     }
 
     /**
@@ -118,10 +112,9 @@ class BattleTracker {
                 synchronized(battleInfo) {
                     battleInfo.endCause = BattleEndCause.UNKNOWN
                 }
-                println("Battle $battleId exceeded maximum duration or ended. Preparing for cleanup.")
+                logDebug("Battle $battleId exceeded maximum duration or ended. Preparing for cleanup.", "cobblespawners")
                 applyValuesAfterBattle(battleId)
                 battlesToCleanup.add(battleId)
-                logDebug("Battle $battleId exceeded maximum duration or ended and was marked for cleanup.")
             }
         }
 
@@ -129,8 +122,7 @@ class BattleTracker {
     }
 
     private fun handleBattleStartPre(battleId: UUID) {
-        logDebug("Battle pre-start for Battle ID: $battleId")
-        println("Battle pre-start for Battle ID: $battleId")
+        logDebug("Battle pre-start for Battle ID: $battleId", "cobblespawners")
         ongoingBattles[battleId] = BattleInfo(
             battleId = battleId,
             actors = emptyList()
@@ -138,8 +130,7 @@ class BattleTracker {
     }
 
     private fun handleBattleStartPost(battleId: UUID, actors: List<BattleActor>) {
-        logDebug("Battle fully started for Battle ID: $battleId")
-        println("Battle fully started for Battle ID: $battleId with actors: ${actors.map { it.javaClass.simpleName }}")
+        logDebug("Battle fully started for Battle ID: $battleId with actors: ${actors.map { it.javaClass.simpleName }}", "cobblespawners")
         val battleInfo = ongoingBattles[battleId] ?: return
         battleInfo.actors = actors
 
@@ -155,41 +146,37 @@ class BattleTracker {
         val battleId = findBattleIdByPokemon(pokemon)
         if (battleId != null) {
             if (pokemon.entity?.owner is ServerPlayerEntity) {
-                println("Player swapped in Pokémon: ${pokemon.species.name}")
-                logDebug("Player swapped in Pokémon: ${pokemon.species.name}")
+                logDebug("Player swapped in Pokémon: ${pokemon.species.name}", "cobblespawners")
                 val battleInfo = ongoingBattles[battleId] ?: return
                 synchronized(battleInfo) {
                     // If there is an existing active Pokémon and it's different from the one being sent in,
                     // update its baseline EVs before switching.
                     battleInfo.currentActivePlayerPokemon?.let { oldPokemon ->
                         if (oldPokemon.uuid != pokemon.uuid) {
-                            println("Detected swap: Old Pokémon ${oldPokemon.species.name} (UUID: ${oldPokemon.uuid}) is being swapped out for ${pokemon.species.name} (UUID: ${pokemon.uuid})")
+                            logDebug("Detected swap: Old Pokémon ${oldPokemon.species.name} (UUID: ${oldPokemon.uuid}) is being swapped out for ${pokemon.species.name} (UUID: ${pokemon.uuid})", "cobblespawners")
                             saveOriginalEVs(battleId, oldPokemon)
                         }
                     }
                 }
                 handlePlayerActivePokemon(battleId, pokemon)
             } else {
-                println("Opponent swapped in Pokémon: ${pokemon.species.name}")
-                logDebug("Opponent swapped in Pokémon: ${pokemon.species.name}")
+                logDebug("Opponent swapped in Pokémon: ${pokemon.species.name}", "cobblespawners")
                 handleOpponentActivePokemon(battleId, pokemon)
             }
         } else {
-            println("Pokémon sent out outside of tracked battle: ${pokemon.species.name}")
-            logDebug("Pokémon sent out outside of tracked battle: ${pokemon.species.name}")
+            logDebug("Pokémon sent out outside of tracked battle: ${pokemon.species.name}", "cobblespawners")
         }
     }
 
     private fun handlePlayerActivePokemon(battleId: UUID, pokemon: Pokemon?) {
-        if (pokemon == null) return logDebug("Player active Pokémon is null, skipping EV save.")
+        if (pokemon == null) return logDebug("Player active Pokémon is null, skipping EV save.", "cobblespawners")
         val battleInfo = ongoingBattles[battleId] ?: return
         synchronized(battleInfo) {
             // Set as current active Pokémon and update baseline EVs
             battleInfo.currentActivePlayerPokemon = pokemon
             battleInfo.participatingPlayerMons[pokemon.uuid] = pokemon
-            println("Setting active player's Pokémon: ${pokemon.species.name} (UUID: ${pokemon.uuid})")
             saveOriginalEVs(battleId, pokemon)
-            logDebug("Tracking Player's Pokémon: ${pokemon.species.name}, UUID: ${pokemon.uuid}")
+            logDebug("Tracking Player's Pokémon: ${pokemon.species.name}, UUID: ${pokemon.uuid}", "cobblespawners")
         }
     }
 
@@ -198,14 +185,13 @@ class BattleTracker {
      * and has custom EVs enabled based on species, form, and aspects (excluding gender).
      */
     private fun handleOpponentActivePokemon(battleId: UUID, pokemon: Pokemon?) {
-        if (pokemon == null) return logDebug("Opponent active Pokémon is null, skipping battle logic.")
+        if (pokemon == null) return logDebug("Opponent active Pokémon is null, skipping battle logic.", "cobblespawners")
         val battleInfo = ongoingBattles[battleId] ?: return
         synchronized(battleInfo) {
             if (!battleInfo.isOpponentFromSpawner) {
                 pokemon.entity?.let { entity ->
                     SpawnerNBTManager.getPokemonInfo(entity)?.let { spawnerInfo ->
                         val (speciesName, formName, aspectsWithoutGender) = getPokemonVariantDetails(pokemon)
-                        println("Opponent Pokémon details: species=$speciesName, form=$formName, aspects=$aspectsWithoutGender")
                         val spawnerData = CobbleSpawnersConfig.spawners[spawnerInfo.spawnerPos]
                         if (spawnerData != null) {
                             val matchingEntry = spawnerData.selectedPokemon.find {
@@ -214,31 +200,30 @@ class BattleTracker {
                                         it.aspects.map { a -> a.lowercase() }.toSet() == aspectsWithoutGender.map { a -> a.lowercase() }.toSet()
                             }
                             if (matchingEntry != null && matchingEntry.evSettings.allowCustomEvsOnDefeat) {
-                                println("Found matching PokémonSpawnEntry for ${pokemon.species.name} with custom EVs enabled")
+                                logDebug("Found matching PokémonSpawnEntry for ${pokemon.species.name} with custom EVs enabled", "cobblespawners")
                                 battleInfo.lastActiveOpponentMon[pokemon.uuid] = pokemon
                                 battleInfo.isOpponentFromSpawner = true
                                 battleInfo.spawnerPos = spawnerInfo.spawnerPos
                                 // Save EVs for the current player Pokémon if available
                                 battleInfo.currentActivePlayerPokemon?.let { playerPokemon ->
-                                    println("Saving baseline EVs for current active player's Pokémon before opponent swap: ${playerPokemon.species.name}")
+                                    logDebug("Saving baseline EVs for current active player's Pokémon before opponent swap: ${playerPokemon.species.name}", "cobblespawners")
                                     saveOriginalEVs(battleId, playerPokemon)
                                 }
                             } else {
-                                println("No matching PokémonSpawnEntry with custom EVs for ${pokemon.species.name} (form: $formName, aspects: $aspectsWithoutGender)")
+                                logDebug("No matching PokémonSpawnEntry with custom EVs for ${pokemon.species.name} (form: $formName, aspects: $aspectsWithoutGender)", "cobblespawners")
                             }
                         } else {
-                            println("Spawner data not found for position ${spawnerInfo.spawnerPos}")
+                            logDebug("Spawner data not found for position ${spawnerInfo.spawnerPos}", "cobblespawners")
                         }
                     }
-                } ?: logDebug("Opponent's Pokémon is not from a spawner. Skipping EV tracking.")
+                } ?: logDebug("Opponent's Pokémon is not from a spawner. Skipping EV tracking.", "cobblespawners")
             }
         }
     }
 
     private fun handleBattleVictory(battleId: UUID) {
         if (!ongoingBattles.containsKey(battleId)) return
-        println("Battle victory for Battle ID: $battleId")
-        logDebug("Battle victory for Battle ID: $battleId")
+        logDebug("Battle victory for Battle ID: $battleId", "cobblespawners")
         val battleInfo = ongoingBattles[battleId] ?: return
         synchronized(battleInfo) {
             battleInfo.endCause = BattleEndCause.NORMAL_VICTORY
@@ -249,8 +234,7 @@ class BattleTracker {
 
     private fun handleBattleFlee(battleId: UUID) {
         if (!ongoingBattles.containsKey(battleId)) return
-        println("Battle flee for Battle ID: $battleId")
-        logDebug("Battle fled for Battle ID: $battleId")
+        logDebug("Battle fled for Battle ID: $battleId", "cobblespawners")
         val battleInfo = ongoingBattles[battleId] ?: return
         synchronized(battleInfo) {
             battleInfo.endCause = BattleEndCause.FLED
@@ -261,8 +245,7 @@ class BattleTracker {
     private fun handlePokemonCaptured(pokemon: Pokemon) {
         val battleId = findBattleIdByPokemon(pokemon)
         if (battleId != null) {
-            println("Pokémon captured during battle: ${pokemon.species.name}")
-            logDebug("Pokémon captured during battle: ${pokemon.species.name}")
+            logDebug("Pokémon captured during battle: ${pokemon.species.name}", "cobblespawners")
             val battleInfo = ongoingBattles[battleId] ?: return
             synchronized(battleInfo) {
                 battleInfo.endCause = BattleEndCause.CAPTURED
@@ -270,24 +253,21 @@ class BattleTracker {
             applyValuesAfterBattle(battleId)
             cleanupBattle(battleId)
         } else {
-            println("Pokémon captured outside of battle: ${pokemon.species.name}")
-            logDebug("Pokémon captured outside of battle: ${pokemon.species.name}")
+            logDebug("Pokémon captured outside of battle: ${pokemon.species.name}", "cobblespawners")
         }
     }
 
     private fun handlePlayerLogout(player: ServerPlayerEntity) {
         val battleId = findBattleIdByPlayer(player)
         if (battleId != null) {
-            println("Player ${player.name.string} logged out during battle $battleId.")
-            logDebug("Player ${player.name.string} logged out during battle $battleId.")
+            logDebug("Player ${player.name.string} logged out during battle $battleId.", "cobblespawners")
             val battleInfo = ongoingBattles[battleId] ?: return
             synchronized(battleInfo) {
                 battleInfo.endCause = BattleEndCause.UNKNOWN
             }
             cleanupBattle(battleId)
         } else {
-            println("Player ${player.name.string} logged out but was not in a tracked battle.")
-            logDebug("Player ${player.name.string} logged out but was not in a tracked battle.")
+            logDebug("Player ${player.name.string} logged out but was not in a tracked battle.", "cobblespawners")
         }
     }
 
@@ -299,24 +279,20 @@ class BattleTracker {
         val battleInfo = ongoingBattles[battleId] ?: return
         synchronized(battleInfo) {
             if (!battleInfo.isOpponentFromSpawner) {
-                println("Battle ID: $battleId did not involve spawner Pokémon. Skipping EV modifications.")
-                logDebug("Battle ID: $battleId did not involve spawner Pokémon. Skipping EV modifications.")
+                logDebug("Battle ID: $battleId did not involve spawner Pokémon. Skipping EV modifications.", "cobblespawners")
                 return
             }
             if (battleInfo.valuesApplied) {
-                println("EV values already applied for Battle ID: $battleId")
-                logDebug("Values already applied for Battle ID: $battleId")
+                logDebug("Values already applied for Battle ID: $battleId", "cobblespawners")
                 return
             }
             if (battleInfo.endCause != BattleEndCause.NORMAL_VICTORY) {
-                println("Battle ended with cause ${battleInfo.endCause}. Skipping EV application for Battle ID: $battleId")
-                logDebug("Battle ended with cause ${battleInfo.endCause}. Skipping EV application for Battle ID: $battleId")
+                logDebug("Battle ended with cause ${battleInfo.endCause}. Skipping EV application for Battle ID: $battleId", "cobblespawners")
                 return
             }
             val opponentPokemon = battleInfo.lastActiveOpponentMon.values.firstOrNull() ?: return
             battleInfo.currentActivePlayerPokemon?.let { playerPokemon ->
-                println("Reverting and applying EVs for active player's Pokémon: ${playerPokemon.species.name}")
-                logDebug("Reverting and applying EVs for active player's Pokémon: ${playerPokemon.species.name}")
+                logDebug("Reverting and applying EVs for active player's Pokémon: ${playerPokemon.species.name}", "cobblespawners")
                 revertEVsAfterChange(battleId, playerPokemon)
                 applyCustomEVs(playerPokemon, opponentPokemon, battleInfo.spawnerPos)
             }
@@ -331,18 +307,16 @@ class BattleTracker {
     private fun saveOriginalEVs(battleId: UUID, pokemon: Pokemon) {
         val battleInfo = ongoingBattles[battleId] ?: return
         if (!battleInfo.isOpponentFromSpawner) {
-            println("Skipping EV save for non-spawner battle Pokémon: ${pokemon.species.name}")
-            logDebug("Skipping EV save for non-spawner battle Pokémon: ${pokemon.species.name}")
+            logDebug("Skipping EV save for non-spawner battle Pokémon: ${pokemon.species.name}", "cobblespawners")
             return
         }
         val currentEVs = Stats.PERMANENT.associateWith { pokemon.evs.get(it) ?: 0 }
         battleInfo.originalEVMap[pokemon.uuid] = currentEVs
-        println("Saving original EVs for Pokémon: ${pokemon.species.name} (UUID: ${pokemon.uuid}). EVs: $currentEVs")
-        logDebug("Saved EVs for ${pokemon.species.name}: ${currentEVs.entries.joinToString { "${it.key}: ${it.value}" }}")
+        logDebug("Saved EVs for ${pokemon.species.name}: ${currentEVs.entries.joinToString { "${it.key}: ${it.value}" }}", "cobblespawners")
     }
 
     private fun revertEVsAfterChange(battleId: UUID, pokemon: Pokemon) {
-        println("Reverting EVs for Pokémon: ${pokemon.species.name}")
+        logDebug("Reverting EVs for Pokémon: ${pokemon.species.name}", "cobblespawners")
         ongoingBattles[battleId]?.originalEVMap?.get(pokemon.uuid)?.forEach { (stat, ev) ->
             pokemon.evs.set(stat, ev)
         }
@@ -353,12 +327,12 @@ class BattleTracker {
      */
     private fun applyCustomEVs(playerPokemon: Pokemon, opponentPokemon: Pokemon, spawnerPos: BlockPos?) {
         if (spawnerPos == null) {
-            println("No spawner position available for EV application")
+            logDebug("No spawner position available for EV application", "cobblespawners")
             return
         }
         val spawnerData = CobbleSpawnersConfig.spawners[spawnerPos] ?: return
         val (speciesName, formName, aspectsWithoutGender) = getPokemonVariantDetails(opponentPokemon)
-        println("Applying custom EVs for defeating ${opponentPokemon.species.name} (form: $formName, aspects: $aspectsWithoutGender)")
+        logDebug("Applying custom EVs for defeating ${opponentPokemon.species.name} (form: $formName, aspects: $aspectsWithoutGender)", "cobblespawners")
         val matchingEntry = spawnerData.selectedPokemon.find {
             it.pokemonName.equals(speciesName, ignoreCase = true) &&
                     (it.formName?.equals(formName, ignoreCase = true) ?: (formName == "Normal")) &&
@@ -374,16 +348,14 @@ class BattleTracker {
                 Stats.SPEED to matchingEntry.evSettings.evSpeed
             )
             customEvs.forEach { (stat, ev) -> playerPokemon.evs.add(stat, ev) }
-            println("Applied custom EVs to ${playerPokemon.species.name}: $customEvs")
+            logDebug("Applied custom EVs to ${playerPokemon.species.name}: $customEvs", "cobblespawners")
         } else {
-            println("No matching PokémonSpawnEntry with custom EVs for ${opponentPokemon.species.name} at $spawnerPos")
+            logDebug("No matching PokémonSpawnEntry with custom EVs for ${opponentPokemon.species.name} at $spawnerPos", "cobblespawners")
         }
     }
 
     private fun cleanupBattle(battleId: UUID) {
         ongoingBattles.remove(battleId)
-        println("Cleaned up battle tracking for Battle ID: $battleId")
-        logDebug("Cleaned up battle tracking for Battle ID: $battleId")
     }
 
     private fun findBattleIdByPokemon(pokemon: Pokemon): UUID? {

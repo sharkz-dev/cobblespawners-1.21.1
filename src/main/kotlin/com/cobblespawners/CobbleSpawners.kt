@@ -71,21 +71,22 @@ object CobbleSpawners : ModInitializer {
 			if (entity is PokemonEntity) {
 				val spawnerInfo = SpawnerNBTManager.getPokemonInfo(entity)
 				if (spawnerInfo != null) {
+					// Use getSpawner which returns nullable SpawnerData
 					val spawnerData = CobbleSpawnersConfig.getSpawner(spawnerInfo.spawnerPos)
-					if (spawnerData != null) {
-						val wanderingSettings = spawnerData.wanderingSettings
-						// Ensure that the specific spawner's wandering setting is enabled
-						if (wanderingSettings?.enabled == true) {
+					// Safely access wanderingSettings using ?. let
+					spawnerData?.wanderingSettings?.let { wanderingSettings ->
+						if (wanderingSettings.enabled) { // Check if enabled
 							val goalSelector = (entity as MobEntityAccessor).getGoalSelector()
 							val alreadyHasWander = goalSelector.goals.any { it.goal is WanderBackToSpawnerGoal }
 							if (!alreadyHasWander) {
 								val wanderGoal = WanderBackToSpawnerGoal(
 									entity,
-									wanderingSettings,
 									Vec3d.ofCenter(spawnerInfo.spawnerPos),
-									1.0 // Speed as Double
+									1.0, // Speed
+									wanderingSettings // Pass the whole settings object
+									// tickDelay defaults to 10
 								)
-								goalSelector.add(1, wanderGoal)
+								goalSelector.add(0, wanderGoal) // Priority 0 is high
 							}
 						}
 					}
@@ -201,7 +202,7 @@ object CobbleSpawners : ModInitializer {
 
 		// Added check: ensure the spawner's own chunk is still loaded.
 		if (serverWorld.getChunk(spawnerPos.x shr 4, spawnerPos.z shr 4, ChunkStatus.FULL, false) == null) {
-			println("spawnPokemon: spawner chunk not loaded for spawner at $spawnerPos, aborting spawn.")
+			logDebug("spawnPokemon: spawner chunk not loaded for spawner at $spawnerPos, aborting spawn.", "cobblespawners")
 			return
 		}
 
@@ -254,7 +255,7 @@ object CobbleSpawners : ModInitializer {
 			}
 
 			if (loadedPositions.isEmpty()) {
-				println("No valid loaded spawn positions available for spawner at $spawnerPos, skipping this spawn attempt.")
+				logDebug("No valid loaded spawn positions available for spawner at $spawnerPos, skipping this spawn attempt.", "cobblespawners")
 				return@repeat
 			}
 
@@ -386,17 +387,23 @@ object CobbleSpawners : ModInitializer {
 		if (spawnerData != null) {
 			val wanderingSettings = spawnerData.wanderingSettings
 			// Check the specific spawner's wandering setting before adding the goal
-			if (wanderingSettings?.enabled == true) {
-				val spawnerCenter = Vec3d.ofCenter(spawnerPos)
-				val speed = 1.0  // Adjust as needed
-
-				val wanderGoal = WanderBackToSpawnerGoal(
-					pokemonEntity,
-					wanderingSettings,  // WanderingSettings is safe to use here
-					spawnerCenter,
-					speed              // tickDelay defaults to 55
-				)
-				(pokemonEntity as MobEntityAccessor).getGoalSelector().add(0, wanderGoal)
+			if (wanderingSettings != null) {
+				if (wanderingSettings.enabled) { // Check if enabled before adding
+					val spawnerCenter = Vec3d.ofCenter(spawnerPos)
+					val speed = 1.0 // Or configure speed if needed
+					val wanderGoal = WanderBackToSpawnerGoal(
+						pokemonEntity,
+						spawnerCenter,
+						speed,
+						wanderingSettings // Pass the whole settings object
+						// tickDelay defaults to 10
+					)
+					// Check if goal already exists (less likely here, but safe)
+					val goalSelector = (pokemonEntity as MobEntityAccessor).getGoalSelector()
+					if (goalSelector.goals.none { it.goal is WanderBackToSpawnerGoal }) {
+						goalSelector.add(0, wanderGoal) // Priority 0 is high
+					}
+				}
 			}
 		} else {
 			logger.warn("Spawner data not found for spawner at $spawnerPos, skipping wander goal initialization.")

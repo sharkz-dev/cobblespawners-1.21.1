@@ -142,7 +142,7 @@ data class SpawnerData(
 )
 
 data class CobbleSpawnersConfigData(
-    override val version: String = "2.0.6",
+    override val version: String = "2.0.7",
     override val configId: String = "cobblespawners",
     var globalConfig: GlobalConfig = GlobalConfig(),
     var spawners: MutableList<SpawnerData> = mutableListOf()
@@ -151,7 +151,7 @@ data class CobbleSpawnersConfigData(
 // Main Configuration Object
 object CobbleSpawnersConfig {
     private val logger = LoggerFactory.getLogger("CobbleSpawnersConfig")
-    private const val CURRENT_VERSION = "2.0.6"
+    private const val CURRENT_VERSION = "2.0.7"
     private const val MOD_ID = "cobblespawners"
 
     private lateinit var configManager: ConfigManager<CobbleSpawnersConfigData>
