@@ -278,7 +278,7 @@ object CobbleSpawners : ModInitializer {
 	}
 
 	fun getWorldUUID(serverWorld: ServerWorld): UUID {
-		// Create a UUID based on the world’s registry key, which uniquely identifies the world
+		// Create a UUID based on the world's registry key, which uniquely identifies the world
 		return UUID.nameUUIDFromBytes(serverWorld.registryKey.value.toString().toByteArray())
 	}
 
@@ -315,7 +315,7 @@ object CobbleSpawners : ModInitializer {
 
 			// Calculate remaining move slots after forced moves
 			val remainingSlots = 4 - forcedMoves.size
-			val selectedMoves = forcedMoves.toMutableList()
+			var selectedMoves = forcedMoves.toMutableList()
 
 			// Only add non-forced moves if we have slots left
 			if (remainingSlots > 0) {
@@ -351,7 +351,7 @@ object CobbleSpawners : ModInitializer {
 			// If we have more than 4 moves, trim to the first 4
 			// Forced moves stay at the beginning
 			if (selectedMoves.size > 4) {
-				selectedMoves.subList(4, selectedMoves.size).clear()
+				selectedMoves = selectedMoves.take(4).toMutableList()
 			}
 
 			// Apply the selected moves
@@ -387,7 +387,7 @@ object CobbleSpawners : ModInitializer {
 		val persistenceSettings = entry.persistenceSettings
 		if (persistenceSettings != null && persistenceSettings.shouldBePersistent(species, pokemon.aspects)) {
 			// Hacer el Pokémon persistente para que no despawnee
-			pokemonEntity.isPersistent = true
+			pokemonEntity.setPersistent()
 			logDebug("Made Pokémon ${pokemon.species.name} persistent due to persistence settings", "cobblespawners")
 		}
 
