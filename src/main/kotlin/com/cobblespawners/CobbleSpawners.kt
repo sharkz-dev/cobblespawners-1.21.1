@@ -5,6 +5,7 @@ import com.cobblespawners.utils.gui.SpawnerPokemonSelectionGui
 import com.cobblemon.mod.common.api.pokemon.PokemonSpecies
 import com.cobblemon.mod.common.api.pokemon.stats.Stats
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity
+import com.everlastingutils.utils.logDebug
 import com.cobblemon.mod.common.pokemon.Pokemon
 import com.cobblespawners.mixin.ServerWorldAccessor
 import com.cobblespawners.api.SpawnerNBTManager
@@ -382,7 +383,15 @@ object CobbleSpawners : ModInitializer {
 			pokemonEntity.pitch
 		)
 
-		// --- New: Initialize the wander goal (Experimental) ---
+		// --- NUEVA SECCIÓN: Aplicar configuración de persistencia ---
+		val persistenceSettings = entry.persistenceSettings
+		if (persistenceSettings != null && persistenceSettings.shouldBePersistent(species, pokemon.aspects)) {
+			// Hacer el Pokémon persistente para que no despawnee
+			pokemonEntity.isPersistent = true
+			logDebug("Made Pokémon ${pokemon.species.name} persistent due to persistence settings", "cobblespawners")
+		}
+
+		// --- Wander goal initialization (existing code) ---
 		val spawnerData = CobbleSpawnersConfig.getSpawner(spawnerPos)
 		if (spawnerData != null) {
 			val wanderingSettings = spawnerData.wanderingSettings
@@ -409,8 +418,6 @@ object CobbleSpawners : ModInitializer {
 			logger.warn("Spawner data not found for spawner at $spawnerPos, skipping wander goal initialization.")
 		}
 
-
-
 		val success = if (lowLevel) {
 			try {
 				(serverWorld as com.cobblespawners.mixin.ServerWorldAccessor).invokeAddFreshEntity(pokemonEntity)
@@ -431,7 +438,6 @@ object CobbleSpawners : ModInitializer {
 			false
 		}
 	}
-
 
 	private fun buildPropertiesString(
 		sanitizedName: String,

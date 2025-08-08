@@ -78,6 +78,40 @@ data class HeldItemsOnSpawn(
     )
 )
 
+data class PersistenceSettings(
+    var makePersistent: Boolean = false,
+    var legendaryPersistent: Boolean = true,
+    var ultraBeastPersistent: Boolean = true,
+    var mythicalPersistent: Boolean = true,
+    var customPersistentLabels: Set<String> = setOf("boss", "rare", "special")
+) {
+
+    /**
+     * Verifica si un Pokémon debe ser persistente basado en sus características
+     */
+    fun shouldBePersistent(species: com.cobblemon.mod.common.pokemon.Species, aspects: Set<String>): Boolean {
+        // Si está explícitamente configurado para ser persistente
+        if (makePersistent) return true
+
+        // Verificar si es legendario y la configuración está activada
+        if (legendaryPersistent && species.legendary) return true
+
+        // Verificar si es Ultra Beast y la configuración está activada
+        if (ultraBeastPersistent && species.ultraBeast) return true
+
+        // Verificar si es mítico y la configuración está activada
+        if (mythicalPersistent && species.mythical) return true
+
+        // Verificar aspectos personalizados
+        val aspectsLowerCase = aspects.map { it.lowercase() }
+        if (customPersistentLabels.any { label ->
+                aspectsLowerCase.contains(label.lowercase())
+            }) return true
+
+        return false
+    }
+}
+
 data class PokemonSpawnEntry(
     val pokemonName: String,
     var formName: String? = null,
@@ -92,7 +126,8 @@ data class PokemonSpawnEntry(
     val evSettings: EVSettings,
     val spawnSettings: SpawnSettings,
     var heldItemsOnSpawn: HeldItemsOnSpawn = HeldItemsOnSpawn(),
-    var moves: MovesSettings? = null
+    var moves: MovesSettings? = null,
+    var persistenceSettings: PersistenceSettings? = null
 )
 
 data class MovesSettings(
@@ -250,6 +285,13 @@ object CobbleSpawnersConfig {
             // Apply reflection-based defaults to nested objects
             spawner.spawnRadius?.let { setNullFieldsToDefaultsForNested(it, SpawnRadius::class) }
             spawner.wanderingSettings?.let { setNullFieldsToDefaultsForNested(it, WanderingSettings::class) }
+
+            // Ensure persistence settings are initialized for all Pokemon entries
+            spawner.selectedPokemon.forEach { pokemon ->
+                if (pokemon.persistenceSettings == null) {
+                    pokemon.persistenceSettings = PersistenceSettings()
+                }
+            }
 
             spawners[spawner.spawnerPos] = spawner
         }
@@ -472,6 +514,15 @@ object CobbleSpawnersConfig {
             ?: throw IllegalArgumentException("Unknown Pokémon: $pokemonName")
         val defaultMoves = getDefaultInitialMoves(species)
 
+        // Crear configuración de persistencia por defecto basada en el tipo de Pokémon
+        val defaultPersistenceSettings = PersistenceSettings(
+            makePersistent = false,
+            legendaryPersistent = true,
+            ultraBeastPersistent = true,
+            mythicalPersistent = true,
+            customPersistentLabels = setOf("boss", "rare", "special")
+        )
+
         return PokemonSpawnEntry(
             pokemonName = pokemonName,
             formName = formName,
@@ -489,7 +540,8 @@ object CobbleSpawnersConfig {
             moves = MovesSettings(
                 allowCustomInitialMoves = false,
                 selectedMoves = defaultMoves
-            )
+            ),
+            persistenceSettings = defaultPersistenceSettings
         )
     }
 

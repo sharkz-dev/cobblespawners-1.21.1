@@ -5,7 +5,8 @@
   "mixins": [
     "MobEntityAccessor",
     "ServerWorldAccessor",
-    "SpawnerEntityDataMixin"
+    "SpawnerEntityDataMixin",
+    "PokemonPersistenceMixin"
   ],
   "injectors": {
     "defaultRequire": 1

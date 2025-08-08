@@ -21,9 +21,10 @@ object PokemonEditSubGui {
         const val IV_SETTINGS = 11
         const val EV_SETTINGS = 13
         const val SPAWN_SETTINGS = 15
-        const val SIZE_SETTINGS = 20  // Changed from 21
-        const val MOVES_SETTINGS = 22  // New
-        const val CAPTURE_SETTINGS = 24  // Changed from 23
+        const val SIZE_SETTINGS = 20
+        const val MOVES_SETTINGS = 22
+        const val CAPTURE_SETTINGS = 24
+        const val PERSISTENCE_SETTINGS = 26  // NUEVO SLOT AGREGADO
         const val OTHER_SETTINGS = 31
         const val BACK = 49
     }
@@ -38,6 +39,7 @@ object PokemonEditSubGui {
         const val CAPTURE_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZTY0YzQ0ODZmOTIzNmY5YTFmYjRiMjFiZjgyM2M1NTZkNmUxNWJmNjg4Yzk2ZDZlZjBkMTc1NTNkYjUwNWIifX19"
         const val OTHER_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMWEwMWQxNTZiMTcyMTVjZWYzMzZhZjRjNDRlNmNjOGNjYjI4NWZiMDViYzNmZWI2MmQzMzdmZWIxZjA5MjkwYSJ9fX0="
         const val MOVES_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYzJlYmJkYjE4ZDc0NzI4MWI1NDYyZjg1N2VlOTg0Njc1YTM5ZDVhMDI3NDQ0NmEyMmY2NjI2NGE1M2QyYjAzNCJ9fX0="
+        const val PERSISTENCE_SETTINGS = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTI1YjhlZWQ1YzU2NWJkNDQwZWM0N2M3OWMyMGQ1Y2YzNzAxNjJiMWQ5YjVkZDMxMDBlZDYyODNmZTAxZDZlIn19fQ=="
     }
 
     fun openPokemonEditSubGui(
@@ -115,6 +117,10 @@ object PokemonEditSubGui {
                 CustomGui.closeGui(player)
                 CaptureSettingsGui.openCaptureSettingsGui(player, spawnerPos, pokemonName, formName, additionalAspects)
             }
+            Slots.PERSISTENCE_SETTINGS -> {  // NUEVO CASO AGREGADO
+                CustomGui.closeGui(player)
+                PersistenceSettingsGui.openPersistenceSettingsGui(player, spawnerPos, pokemonName, formName, additionalAspects)
+            }
             Slots.OTHER_SETTINGS -> {
                 CustomGui.closeGui(player)
                 OtherSettingsGui.openOtherEditableGui(player, spawnerPos, pokemonName, formName, additionalAspects)
@@ -172,6 +178,13 @@ object PokemonEditSubGui {
                     "§7to refine capture mechanics."
                 )
             ),
+            Slots.PERSISTENCE_SETTINGS to Triple(  // NUEVO BOTÓN AGREGADO
+                "Edit Persistence Settings", Formatting.LIGHT_PURPLE,
+                listOf(
+                    "§7Configure if Pokémon should be persistent",
+                    "§7and never despawn naturally."
+                )
+            ),
             Slots.OTHER_SETTINGS to Triple(
                 "Edit Other Stats", Formatting.LIGHT_PURPLE,
                 listOf(
@@ -192,6 +205,7 @@ object PokemonEditSubGui {
             Slots.SIZE_SETTINGS to Textures.SIZE_SETTINGS,
             Slots.MOVES_SETTINGS to Textures.MOVES_SETTINGS,
             Slots.CAPTURE_SETTINGS to Textures.CAPTURE_SETTINGS,
+            Slots.PERSISTENCE_SETTINGS to Textures.PERSISTENCE_SETTINGS,  // NUEVA TEXTURA
             Slots.OTHER_SETTINGS to Textures.OTHER_SETTINGS,
             Slots.BACK to Textures.BACK
         )
